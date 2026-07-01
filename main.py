@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional, List
@@ -28,15 +28,22 @@ def startup():
 
 @app.get("/")
 def read_root():
-    # Автоматически ищем ваш интерфейс и показываем его на главной странице
-    if os.path.exists("platforma-calc.html"):
-        return FileResponse("platforma-calc.html")
-    elif os.path.exists("app/platforma-calc.html"):
-        return FileResponse("app/platforma-calc.html")
+    # index.html — единственный источник правды для фронтенда
+    if os.path.exists("index.html"):
+        return FileResponse("index.html")
+    elif os.path.exists("app/index.html"):
+        return FileResponse("app/index.html")
     return {
-        "message": "Бэкенд работает, но файл platforma-calc.html не найден в корне проекта. "
+        "message": "Бэкенд работает, но файл index.html не найден в корне проекта. "
                    "Убедитесь, что он лежит в той же папке, что и main.py!"
     }
+
+
+@app.get("/platforma-calc.html")
+def legacy_url_redirect():
+    # Раньше калькулятор дублировался в этом файле — теперь это просто
+    # редирект на "/", чтобы не сломать старые ссылки/закладки.
+    return RedirectResponse(url="/")
 
 
 # ── 1. SCHEMAS (СТРОГО ВЫШЕ ФУНКЦИЙ) ────────────────────────────────────────

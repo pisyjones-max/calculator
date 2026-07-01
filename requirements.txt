@@ -1,0 +1,11 @@
+fastapi==0.138.2
+uvicorn[standard]==0.49.0
+sqlalchemy==2.0.51
+pydantic==2.13.4
+weasyprint==69.0
+
+# ВАЖНО для деплоя: weasyprint требует системные библиотеки
+# (libpango-1.0-0, libpangocairo-1.0-0, libcairo2, libgdk-pixbuf2.0-0).
+# На Render/Railway с обычным Python-buildpack их нет по умолчанию —
+# нужен Dockerfile с apt-get install или buildpack с поддержкой apt-пакетов.
+# См. Задачу 6 (деплой) в плане доработки калькулятора.

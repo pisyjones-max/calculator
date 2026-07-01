@@ -15,6 +15,7 @@
   --green-bg:#eaf3de;--green-fg:#27500a;--green-border:#c0dd97;
   --blue-bg:#e6f1fb;--blue-fg:#185fa5;
   --amber-bg:#faeeda;--amber-fg:#854f0b;
+  --red-bg:#fcebeb;--red-fg:#791f1f;--red-border:#f7c1c1;
   --r-md:8px;--r-lg:12px;
 }
 *{box-sizing:border-box;margin:0;padding:0}
@@ -31,6 +32,8 @@ button{font-family:inherit;cursor:pointer;border:none;outline:none;transition:al
 .btn-ghost:hover{background:var(--surface2)}
 .card{background:var(--surface);border:0.5px solid var(--border);border-radius:var(--r-lg);padding:1.25rem}
 select option{background:var(--surface)}
+.spin{width:16px;height:16px;border-radius:50%;border:2px solid rgba(255,255,255,0.35);border-top-color:#fff;display:inline-block;animation:spin 0.7s linear infinite;vertical-align:-3px;margin-right:8px}
+@keyframes spin{to{transform:rotate(360deg)}}
 </style>
 </head>
 <body>
@@ -38,74 +41,49 @@ select option{background:var(--surface)}
 <script type="text/babel">
 const {useState, useMemo} = React;
 
-/* ── DATA ─────────────────────────────────────── */
-const SUPPLIERS = [
-  {id:1,name:"СтройМаркет МО",region:"Москва и область",delivery:2,minOrder:5000,phone:"+7 (495) 123-45-67",rating:4.8,factor:1.00,badge:"Лучшая цена"},
-  {id:2,name:"КровМатериалы",region:"Ногинск, Богородский р-н",delivery:1,minOrder:3000,phone:"+7 (496) 234-56-78",rating:4.9,factor:0.95,badge:"Быстрая доставка"},
-  {id:3,name:"PLATFORMA Склад",region:"Богородский р-н",delivery:0,minOrder:0,phone:"+7 (496) 345-67-89",rating:5.0,factor:0.90,badge:"Самовывоз"},
-];
+/* ── API ──────────────────────────────────────── */
+// Если фронт и бэкенд на разных доменах — задайте window.PLATFORMA_API_BASE
+// ДО этого скрипта, например: <script>window.PLATFORMA_API_BASE="https://api.platforma-msk.ru"</script>
+const API_BASE = window.PLATFORMA_API_BASE || "";
 
-/* ── CALCULATORS ──────────────────────────────── */
-function calcRoofing({length,width,angle,material}){
-  const rad = angle * Math.PI / 180;
-  const slopeLen = (width/2) / Math.cos(rad);
-  const area = length * slopeLen * 2 * 1.10; // +10% нахлёст
-  const matPrices = {metal_tile:650, soft_roof:480, profnastil:420};
-  const matNames  = {metal_tile:"Металлочерепица", soft_roof:"Мягкая кровля (GAF)", profnastil:"Профнастил С-20"};
-  return [
-    {name:matNames[material]||"Металлочерепица", qty:Math.ceil(area),    unit:"м²",    price:matPrices[material]||650, cat:"main"},
-    {name:"Конёк (планка 3м)",                    qty:Math.ceil((length+0.3)/3), unit:"шт", price:580, cat:"elem"},
-    {name:"Гидроизоляция Изоспан А",              qty:Math.ceil(area*1.15/15)*15, unit:"м²", price:45, cat:"elem"},
-    {name:"Обрешётка (доска 25×100мм)",           qty:Math.ceil(length * Math.ceil(slopeLen/0.35) * 2), unit:"пог.м", price:28, cat:"wood"},
-    {name:"Саморезы кровельные (уп 250шт)",       qty:Math.ceil(Math.ceil(area/2)*8/250), unit:"уп", price:320, cat:"fastener"},
-    {name:"Ветровая планка",                       qty:Math.ceil(slopeLen*2/2), unit:"шт", price:290, cat:"elem"},
-    {name:"Уплотнитель конька",                    qty:Math.ceil(length+0.3),  unit:"пог.м", price:85, cat:"seal"},
-  ];
+async function apiCalculate(calcType, payload){
+  const res = await fetch(`${API_BASE}/api/calculate/${calcType}`, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(payload),
+  });
+  if(!res.ok){
+    let detail = "Не удалось выполнить расчёт";
+    try{ const j = await res.json(); if(j.detail) detail = j.detail; }catch(e){}
+    throw new Error(detail);
+  }
+  return res.json();
 }
 
-function calcFacade({length,width,height,windows,doors,material}){
-  const perim = 2*(+length + +width);
-  const wallArea = perim * +height;
-  const openings = +windows*1.5 + +doors*2.1;
-  const net = wallArea - openings;
-  const specs = {
-    siding:       {name:"Сайдинг виниловый",      price:390, area:0.115},
-    facade_panel: {name:"Фасадная панель Döcke",  price:550, area:0.24},
-    fiber:        {name:"Хаубер (фиброцемент)",   price:850, area:0.24},
-  };
-  const s = specs[material] || specs.siding;
-  return [
-    {name:s.name,               qty:Math.ceil(net/s.area*1.07), unit:"шт",    price:s.price, cat:"main"},
-    {name:"Внешний угол (3м)",  qty:Math.ceil(+height/3)*4,     unit:"шт",    price:220, cat:"elem"},
-    {name:"Стартовая планка",   qty:Math.ceil(perim/3.6),       unit:"шт",    price:180, cat:"elem"},
-    {name:"Финишная планка",    qty:Math.ceil(perim/3.6),       unit:"шт",    price:175, cat:"elem"},
-    {name:"J-профиль оконный",  qty:Math.ceil((+windows*0.75+doors*0.9)*2), unit:"шт", price:160, cat:"elem"},
-    {name:"Саморезы (уп 250шт)",qty:Math.ceil(net*1.5/250),    unit:"уп",    price:280, cat:"fastener"},
-    {name:"Подоконник 150мм",   qty:+windows,                   unit:"шт",    price:320, cat:"elem"},
-  ];
+async function apiCreateQuote(calcId, supplierId){
+  const res = await fetch(`${API_BASE}/api/quotes?calc_id=${calcId}&supplier_id=${supplierId}`, {
+    method: "POST",
+  });
+  if(!res.ok){
+    let detail = "Не удалось сформировать смету";
+    try{ const j = await res.json(); if(j.detail) detail = j.detail; }catch(e){}
+    throw new Error(detail);
+  }
+  return res.json();
 }
 
-function calcInsulation({area,thickness,material}){
-  const mats = {
-    mineral: {name:"Минвата КНАУФ (уп 3м²)", price:1850, slab:0.05},
-    foam:    {name:"Пенопласт ПСБ-25 (уп 3м²)", price:1200, slab:0.05},
-    epp:     {name:"Пенополистирол XPS (уп 3м²)", price:2100, slab:0.05},
-  };
-  const m = mats[material] || mats.mineral;
-  const layers = Math.ceil(+thickness / m.slab);
-  return [
-    {name:m.name,                    qty:Math.ceil(area*layers/3*1.05), unit:"уп",  price:m.price, cat:"main"},
-    {name:"Дюбель-зонтик",           qty:Math.ceil(area*6),             unit:"шт",  price:8, cat:"fastener"},
-    {name:"Армировочная сетка",      qty:Math.ceil(area*1.1),           unit:"м²",  price:55, cat:"elem"},
-    {name:"Фасадный клей (меш 25кг)",qty:Math.ceil(area/3),             unit:"меш", price:480, cat:"elem"},
-    {name:"Пароизоляция",            qty:Math.ceil(area*1.1),           unit:"м²",  price:38, cat:"elem"},
-  ];
+async function apiSendRequest(body){
+  const res = await fetch(`${API_BASE}/api/quotes/send-request`, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(body),
+  });
+  if(!res.ok) throw new Error("Не удалось отправить заявку");
+  return res.json();
 }
 
 /* ── UTILS ────────────────────────────────────── */
 const fmt = n => new Intl.NumberFormat("ru-RU").format(Math.round(n)) + " ₽";
-const today = () => new Date().toLocaleDateString("ru-RU");
-const quoteNum = () => "КП-" + (Math.floor(Math.random()*9000)+1000);
 const CAT_LABELS = {main:"Основной материал",elem:"Элементы и комплектующие",wood:"Деревянные конструкции",fastener:"Крепёж",seal:"Уплотнители"};
 
 /* ── SHARED COMPONENTS ────────────────────────── */
@@ -126,7 +104,7 @@ function StepBar({steps, current}){
         <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:"6px",position:"relative",zIndex:1}}>
           <div style={{
             width:"28px",height:"28px",borderRadius:"50%",
-            background: i < current ? "var(--accent)" : i === current ? "var(--accent)" : "var(--bg)",
+            background: i <= current ? "var(--accent)" : "var(--bg)",
             border: i <= current ? "none" : "1px solid var(--border2)",
             color: i <= current ? "var(--accent-fg)" : "var(--text3)",
             display:"flex",alignItems:"center",justifyContent:"center",
@@ -149,30 +127,61 @@ function InfoBox({children}){
   );
 }
 
+function ErrorBox({message, onRetry}){
+  return (
+    <div style={{padding:"12px 14px",background:"var(--red-bg)",border:"0.5px solid var(--red-border)",borderRadius:"var(--r-md)",marginBottom:"14px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:"12px"}}>
+      <span style={{fontSize:"13px",color:"var(--red-fg)"}}>{message}</span>
+      {onRetry && <button className="btn-ghost" style={{fontSize:"12px",padding:"6px 12px",flexShrink:0}} onClick={onRetry}>Повторить</button>}
+    </div>
+  );
+}
+
 /* ── ROOFING FORM ─────────────────────────────── */
 function RoofingForm({onResult}){
-  const[p,setP] = useState({length:10,width:8,angle:30,material:"metal_tile"});
+  const[p,setP] = useState({length:10,width:8,angle:30,material:"metal_tile_grand"});
+  const[loading,setLoading] = useState(false);
+  const[error,setError] = useState(null);
   const up = (k,v) => setP(x=>({...x,[k]:v}));
+
+  // Предварительная площадь для наглядности — точные цифры и состав
+  // материалов приходят с сервера после нажатия «Рассчитать»
   const slopeLen = (p.width/2) / Math.cos(p.angle*Math.PI/180);
-  const area = Math.round(p.length * slopeLen * 2 * 1.10);
+  const areaPreview = Math.round(p.length * slopeLen * 2 * 1.10);
+
+  async function submit(){
+    setLoading(true); setError(null);
+    try{
+      const r = await apiCalculate("roofing", p);
+      onResult(r);
+    }catch(e){
+      setError(e.message);
+    }finally{
+      setLoading(false);
+    }
+  }
+
   return (
     <div>
       <InfoBox>Двускатная крыша. Все размеры — по внешним габаритам.</InfoBox>
-      <FieldRow label="Длина дома (м)"><input type="number" value={p.length} min="3" max="60" step="0.5" onChange={e=>up("length",+e.target.value)}/></FieldRow>
-      <FieldRow label="Ширина дома (м)"><input type="number" value={p.width} min="3" max="30" step="0.5" onChange={e=>up("width",+e.target.value)}/></FieldRow>
-      <FieldRow label="Угол ската (°)"><input type="number" value={p.angle} min="10" max="60" step="5" onChange={e=>up("angle",+e.target.value)}/></FieldRow>
+      <FieldRow label="Длина дома (м)"><input type="number" inputMode="decimal" value={p.length} min="3" max="60" step="0.5" onChange={e=>up("length",+e.target.value)}/></FieldRow>
+      <FieldRow label="Ширина дома (м)"><input type="number" inputMode="decimal" value={p.width} min="3" max="30" step="0.5" onChange={e=>up("width",+e.target.value)}/></FieldRow>
+      <FieldRow label="Угол ската (°)"><input type="number" inputMode="decimal" value={p.angle} min="10" max="60" step="5" onChange={e=>up("angle",+e.target.value)}/></FieldRow>
       <FieldRow label="Материал">
         <select value={p.material} onChange={e=>up("material",e.target.value)}>
-          <option value="metal_tile">Металлочерепица</option>
-          <option value="soft_roof">Мягкая кровля</option>
-          <option value="profnastil">Профнастил</option>
+          <option value="metal_tile_grand">Металлочерепица Grand Line</option>
+          <option value="metal_tile_monterrey">Металлочерепица Monterrey</option>
+          <option value="profnastil_c20">Профнастил С-20</option>
+          <option value="soft_roof_shinglas">Мягкая кровля Shinglas</option>
         </select>
       </FieldRow>
       <div style={{padding:"12px",background:"var(--green-bg)",borderRadius:"var(--r-md)",marginBottom:"1.25rem",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         <span style={{fontSize:"13px",color:"var(--green-fg)"}}>Площадь кровли (с нахлёстом 10%)</span>
-        <span style={{fontSize:"20px",fontWeight:"600",color:"var(--green-fg)"}}>{area} м²</span>
+        <span style={{fontSize:"20px",fontWeight:"600",color:"var(--green-fg)"}}>{areaPreview} м²</span>
       </div>
-      <button className="btn" style={{width:"100%"}} onClick={()=>onResult(calcRoofing(p))}>Рассчитать →</button>
+      {error && <ErrorBox message={error} onRetry={submit}/>}
+      <button className="btn" style={{width:"100%"}} disabled={loading} onClick={submit}>
+        {loading && <span className="spin"/>}{loading ? "Считаем..." : "Рассчитать →"}
+      </button>
     </div>
   );
 }
@@ -180,28 +189,46 @@ function RoofingForm({onResult}){
 /* ── FACADE FORM ──────────────────────────────── */
 function FacadeForm({onResult}){
   const[p,setP] = useState({length:10,width:8,height:3,windows:6,doors:2,material:"siding"});
+  const[loading,setLoading] = useState(false);
+  const[error,setError] = useState(null);
   const up = (k,v) => setP(x=>({...x,[k]:v}));
-  const net = Math.round(2*(p.length+p.width)*p.height - (p.windows*1.5+p.doors*2.1));
+  const netPreview = Math.round(2*(p.length+p.width)*p.height - (p.windows*1.5+p.doors*2.1));
+
+  async function submit(){
+    setLoading(true); setError(null);
+    try{
+      const r = await apiCalculate("facade", p);
+      onResult(r);
+    }catch(e){
+      setError(e.message);
+    }finally{
+      setLoading(false);
+    }
+  }
+
   return (
     <div>
       <InfoBox>Периметр × высота за вычетом оконных и дверных проёмов.</InfoBox>
-      <FieldRow label="Длина дома (м)"><input type="number" value={p.length} min="3" max="60" step="0.5" onChange={e=>up("length",+e.target.value)}/></FieldRow>
-      <FieldRow label="Ширина дома (м)"><input type="number" value={p.width} min="3" max="30" step="0.5" onChange={e=>up("width",+e.target.value)}/></FieldRow>
-      <FieldRow label="Высота стен (м)"><input type="number" value={p.height} min="2" max="12" step="0.5" onChange={e=>up("height",+e.target.value)}/></FieldRow>
-      <FieldRow label="Окна (шт)"><input type="number" value={p.windows} min="0" max="40" onChange={e=>up("windows",+e.target.value)}/></FieldRow>
-      <FieldRow label="Двери (шт)"><input type="number" value={p.doors} min="0" max="10" onChange={e=>up("doors",+e.target.value)}/></FieldRow>
+      <FieldRow label="Длина дома (м)"><input type="number" inputMode="decimal" value={p.length} min="3" max="60" step="0.5" onChange={e=>up("length",+e.target.value)}/></FieldRow>
+      <FieldRow label="Ширина дома (м)"><input type="number" inputMode="decimal" value={p.width} min="3" max="30" step="0.5" onChange={e=>up("width",+e.target.value)}/></FieldRow>
+      <FieldRow label="Высота стен (м)"><input type="number" inputMode="decimal" value={p.height} min="2" max="12" step="0.5" onChange={e=>up("height",+e.target.value)}/></FieldRow>
+      <FieldRow label="Окна (шт)"><input type="number" inputMode="numeric" value={p.windows} min="0" max="40" onChange={e=>up("windows",+e.target.value)}/></FieldRow>
+      <FieldRow label="Двери (шт)"><input type="number" inputMode="numeric" value={p.doors} min="0" max="10" onChange={e=>up("doors",+e.target.value)}/></FieldRow>
       <FieldRow label="Материал">
         <select value={p.material} onChange={e=>up("material",e.target.value)}>
-          <option value="siding">Виниловый сайдинг</option>
-          <option value="facade_panel">Фасадные панели Döcke</option>
-          <option value="fiber">Хаубер / фиброцемент</option>
+          <option value="siding">Виниловый сайдинг Döcke</option>
+          <option value="facade_panel">Фасадная панель Döcke</option>
+          <option value="fiber">Хаубер (фиброцемент)</option>
         </select>
       </FieldRow>
       <div style={{padding:"12px",background:"var(--green-bg)",borderRadius:"var(--r-md)",marginBottom:"1.25rem",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         <span style={{fontSize:"13px",color:"var(--green-fg)"}}>Площадь фасада (чистая)</span>
-        <span style={{fontSize:"20px",fontWeight:"600",color:"var(--green-fg)"}}>{net} м²</span>
+        <span style={{fontSize:"20px",fontWeight:"600",color:"var(--green-fg)"}}>{netPreview} м²</span>
       </div>
-      <button className="btn" style={{width:"100%"}} onClick={()=>onResult(calcFacade(p))}>Рассчитать →</button>
+      {error && <ErrorBox message={error} onRetry={submit}/>}
+      <button className="btn" style={{width:"100%"}} disabled={loading} onClick={submit}>
+        {loading && <span className="spin"/>}{loading ? "Считаем..." : "Рассчитать →"}
+      </button>
     </div>
   );
 }
@@ -209,11 +236,26 @@ function FacadeForm({onResult}){
 /* ── INSULATION FORM ──────────────────────────── */
 function InsulationForm({onResult}){
   const[p,setP] = useState({area:80,thickness:0.15,material:"mineral"});
+  const[loading,setLoading] = useState(false);
+  const[error,setError] = useState(null);
   const up = (k,v) => setP(x=>({...x,[k]:v}));
+
+  async function submit(){
+    setLoading(true); setError(null);
+    try{
+      const r = await apiCalculate("insulation", p);
+      onResult(r);
+    }catch(e){
+      setError(e.message);
+    }finally{
+      setLoading(false);
+    }
+  }
+
   return (
     <div>
       <InfoBox>Расчёт по площади и требуемой толщине. Запас 5%.</InfoBox>
-      <FieldRow label="Площадь (м²)"><input type="number" value={p.area} min="5" max="1000" step="5" onChange={e=>up("area",+e.target.value)}/></FieldRow>
+      <FieldRow label="Площадь (м²)"><input type="number" inputMode="decimal" value={p.area} min="5" max="1000" step="5" onChange={e=>up("area",+e.target.value)}/></FieldRow>
       <FieldRow label="Толщина слоя">
         <select value={p.thickness} onChange={e=>up("thickness",+e.target.value)}>
           <option value={0.05}>50 мм</option>
@@ -229,16 +271,19 @@ function InsulationForm({onResult}){
           <option value="epp">Пенополистирол XPS</option>
         </select>
       </FieldRow>
-      <button className="btn" style={{width:"100%",marginTop:"0.5rem"}} onClick={()=>onResult(calcInsulation(p))}>Рассчитать →</button>
+      {error && <ErrorBox message={error} onRetry={submit}/>}
+      <button className="btn" style={{width:"100%",marginTop:"0.5rem"}} disabled={loading} onClick={submit}>
+        {loading && <span className="spin"/>}{loading ? "Считаем..." : "Рассчитать →"}
+      </button>
     </div>
   );
 }
 
-/* ── MATERIALS TABLE ──────────────────────────── */
-function MaterialsTable({items, factor=1}){
-  const total = items.reduce((a,it)=>a+it.qty*it.price*factor,0);
+/* ── MATERIALS TABLE (по базовым ценам, шаг «Материалы») ── */
+function MaterialsTable({items}){
+  const total = items.reduce((a,it)=>a+it.qty*it.base_price,0);
   const grouped = Object.entries(CAT_LABELS)
-    .map(([k,label])=>[label, items.filter(x=>x.cat===k)])
+    .map(([k,label])=>[label, items.filter(x=>x.category===k)])
     .filter(([,g])=>g.length>0);
   return (
     <div>
@@ -249,10 +294,33 @@ function MaterialsTable({items, factor=1}){
             <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 70px 80px 90px",gap:"6px",alignItems:"center",padding:"8px 0",borderBottom:"0.5px solid var(--border)"}}>
               <span style={{fontSize:"13px"}}>{it.name}</span>
               <span style={{fontSize:"13px",color:"var(--text2)",textAlign:"right"}}>{it.qty}&nbsp;{it.unit}</span>
-              <span style={{fontSize:"13px",color:"var(--text2)",textAlign:"right"}}>{fmt(it.price*factor)}</span>
-              <span style={{fontSize:"13px",fontWeight:"500",textAlign:"right"}}>{fmt(it.qty*it.price*factor)}</span>
+              <span style={{fontSize:"13px",color:"var(--text2)",textAlign:"right"}}>{fmt(it.base_price)}</span>
+              <span style={{fontSize:"13px",fontWeight:"500",textAlign:"right"}}>{fmt(it.qty*it.base_price)}</span>
             </div>
           ))}
+        </div>
+      ))}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",paddingTop:"12px",borderTop:"1.5px solid var(--text)"}}>
+        <span style={{fontWeight:"500"}}>Итого (справочно, до выбора поставщика)</span>
+        <span style={{fontSize:"22px",fontWeight:"600"}}>{fmt(total)}</span>
+      </div>
+    </div>
+  );
+}
+
+/* ── PRICED ITEMS TABLE (реальные цены конкретного поставщика) ── */
+function PricedItemsTable({itemsPriced, total}){
+  return (
+    <div>
+      {itemsPriced.map((it,i)=>(
+        <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 70px 80px 90px",gap:"6px",alignItems:"center",padding:"8px 0",borderBottom:"0.5px solid var(--border)"}}>
+          <span style={{fontSize:"13px"}}>
+            {it.name}
+            {!it.in_stock && <span style={{fontSize:"11px",color:"var(--amber-fg)",marginLeft:"6px"}}>под заказ</span>}
+          </span>
+          <span style={{fontSize:"13px",color:"var(--text2)",textAlign:"right"}}>{it.qty}&nbsp;{it.unit}</span>
+          <span style={{fontSize:"13px",color:"var(--text2)",textAlign:"right"}}>{fmt(it.price)}</span>
+          <span style={{fontSize:"13px",fontWeight:"500",textAlign:"right"}}>{fmt(it.subtotal)}</span>
         </div>
       ))}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",paddingTop:"12px",borderTop:"1.5px solid var(--text)"}}>
@@ -263,31 +331,25 @@ function MaterialsTable({items, factor=1}){
   );
 }
 
-/* ── SUPPLIER CARDS ───────────────────────────── */
-function SupplierCards({items, selected, onSelect}){
-  const sorted = useMemo(()=>{
-    return SUPPLIERS.map(s=>({
-      ...s,
-      total: Math.round(items.reduce((a,it)=>a+it.qty*it.price*s.factor,0)),
-    })).sort((a,b)=>a.total-b.total);
-  },[items]);
-
-  const badgeStyle = (i) => {
-    const styles = [
-      {bg:"var(--green-bg)",fg:"var(--green-fg)"},
-      {bg:"var(--blue-bg)", fg:"var(--blue-fg)"},
-      {bg:"var(--amber-bg)",fg:"var(--amber-fg)"},
-    ];
-    return styles[i] || styles[0];
+/* ── SUPPLIER CARDS (реальные предложения из ответа API) ── */
+function SupplierCards({offers, selected, onSelect}){
+  const badgeFor = (offer, i) => {
+    if(i===0) return {text:"Лучшее предложение", bg:"var(--green-bg)", fg:"var(--green-fg)"};
+    if(offer.supplier.delivery_days===0) return {text:"Самовывоз", bg:"var(--amber-bg)", fg:"var(--amber-fg)"};
+    return {text:"Есть в наличии", bg:"var(--blue-bg)", fg:"var(--blue-fg)"};
   };
+
+  if(!offers || offers.length===0){
+    return <ErrorBox message="Нет доступных поставщиков для этого расчёта. Попробуйте другой материал."/>;
+  }
 
   return (
     <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>
-      {sorted.map((s,i)=>{
-        const bs = badgeStyle(i);
-        const isSelected = selected?.id === s.id;
+      {offers.map((offer,i)=>{
+        const bs = badgeFor(offer,i);
+        const isSelected = selected?.supplier.id === offer.supplier.id;
         return (
-          <div key={s.id} onClick={()=>onSelect(s)}
+          <div key={offer.supplier.id} onClick={()=>onSelect(offer)}
             style={{
               padding:"1rem 1.25rem",borderRadius:"var(--r-lg)",cursor:"pointer",
               background:"var(--surface)",
@@ -297,19 +359,23 @@ function SupplierCards({items, selected, onSelect}){
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"8px"}}>
               <div>
                 <div style={{display:"flex",alignItems:"center",gap:"8px",flexWrap:"wrap"}}>
-                  <span style={{fontWeight:"600",fontSize:"15px"}}>{s.name}</span>
-                  <span style={{fontSize:"11px",fontWeight:"500",padding:"3px 9px",borderRadius:"20px",background:bs.bg,color:bs.fg}}>{s.badge}</span>
+                  <span style={{fontWeight:"600",fontSize:"15px"}}>{offer.supplier.name}</span>
+                  <span style={{fontSize:"11px",fontWeight:"500",padding:"3px 9px",borderRadius:"20px",background:bs.bg,color:bs.fg}}>{bs.text}</span>
                 </div>
-                <div style={{fontSize:"12px",color:"var(--text3)",marginTop:"3px"}}>{s.region} · {s.delivery===0?"самовывоз":`доставка ${s.delivery} дн.`}</div>
+                <div style={{fontSize:"12px",color:"var(--text3)",marginTop:"3px"}}>
+                  {offer.supplier.region} · {offer.supplier.delivery_days===0?"самовывоз":`доставка ${offer.supplier.delivery_days} дн.`}
+                </div>
               </div>
               <div style={{textAlign:"right",flexShrink:0,marginLeft:"12px"}}>
-                <div style={{fontSize:"20px",fontWeight:"700"}}>{fmt(s.total)}</div>
-                {s.factor<1&&<div style={{fontSize:"12px",color:"var(--green-fg)",fontWeight:"500"}}>−{Math.round((1-s.factor)*100)}% скидка</div>}
+                <div style={{fontSize:"20px",fontWeight:"700"}}>{fmt(offer.total)}</div>
+                <div style={{fontSize:"11px",color:"var(--text3)"}}>{Math.round(offer.coverage*100)}% позиций в наличии</div>
               </div>
             </div>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingTop:"8px",borderTop:"0.5px solid var(--border)"}}>
-              <span style={{fontSize:"12px",color:"var(--text2)"}}>⭐ {s.rating} · Мин. заказ {s.minOrder===0?"без лимита":fmt(s.minOrder)}</span>
-              <span style={{fontSize:"12px",color:"var(--text2)"}}>{s.phone}</span>
+              <span style={{fontSize:"12px",color:"var(--text2)"}}>
+                Мин. заказ {offer.supplier.min_order_rub===0?"без лимита":fmt(offer.supplier.min_order_rub)}
+              </span>
+              <span style={{fontSize:"12px",color:"var(--text2)"}}>{offer.supplier.phone}</span>
             </div>
           </div>
         );
@@ -319,84 +385,45 @@ function SupplierCards({items, selected, onSelect}){
 }
 
 /* ── QUOTE VIEW ───────────────────────────────── */
-function QuoteView({items, supplier, calcType, onBack, onNew}){
+function QuoteView({calcId, calcType, offer, onBack, onNew}){
+  const[quote,setQuote] = useState(null);
+  const[quoteLoading,setQuoteLoading] = useState(true);
+  const[quoteError,setQuoteError] = useState(null);
+
   const[name,setName] = useState("");
   const[phone,setPhone] = useState("");
+  const[sending,setSending] = useState(false);
   const[sent,setSent] = useState(false);
-  const num = useMemo(()=>quoteNum(),[]);
-  const date = today();
+  const[sendError,setSendError] = useState(null);
+
   const typeNames = {roofing:"Кровля",facade:"Фасад",insulation:"Утепление"};
   const typeName = typeNames[calcType]||"Материалы";
-  const f = supplier.factor;
-  const total = Math.round(items.reduce((a,it)=>a+it.qty*it.price*f,0));
 
-  function printPDF(){
-    const w = window.open("","_blank","width=800,height=700");
-    const rows = items.map(it=>`
-      <tr>
-        <td>${it.name}</td>
-        <td class="c">${it.qty} ${it.unit}</td>
-        <td class="r">${new Intl.NumberFormat("ru-RU").format(Math.round(it.price*f))} ₽</td>
-        <td class="r"><b>${new Intl.NumberFormat("ru-RU").format(Math.round(it.qty*it.price*f))} ₽</b></td>
-      </tr>`).join("");
-    w.document.write(`<!DOCTYPE html>
-<html lang="ru"><head><meta charset="UTF-8"/><title>${num}</title>
-<style>
-  body{font-family:Arial,Helvetica,sans-serif;padding:40px;max-width:800px;margin:0 auto;color:#1a1a18;font-size:13px}
-  .header{display:flex;justify-content:space-between;padding-bottom:20px;border-bottom:2px solid #1a1a18;margin-bottom:24px}
-  .logo{font-size:26px;font-weight:700;letter-spacing:-1px}
-  .logo-sub{font-size:12px;color:#888;margin-top:2px}
-  .meta{text-align:right;font-size:12px;color:#888;line-height:1.8}
-  .meta b{color:#1a1a18;font-size:14px}
-  table{width:100%;border-collapse:collapse;margin:0 0 20px}
-  th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;padding:8px 6px;border-bottom:1.5px solid #1a1a18;color:#888}
-  td{padding:8px 6px;border-bottom:0.5px solid #e0e0e0;font-size:13px}
-  .c{text-align:center}.r{text-align:right}
-  .total-row{font-size:16px;font-weight:700;border-top:2px solid #1a1a18!important;padding-top:12px}
-  .footer{margin-top:32px;padding-top:16px;border-top:0.5px solid #e0e0e0;font-size:11px;color:#aaa;line-height:1.8}
-  .supplier-block{background:#f5f5f2;padding:14px 18px;border-radius:8px;margin:16px 0;font-size:13px}
-  @media print{button{display:none}}
-</style></head>
-<body>
-<div class="header">
-  <div>
-    <div class="logo">PLATFORMA</div>
-    <div class="logo-sub">Кровельные и фасадные материалы</div>
-    <div class="logo-sub">Богородский р-н, Московская область</div>
-  </div>
-  <div class="meta">
-    <b>${num}</b><br/>
-    Дата: ${date}<br/>
-    Тип расчёта: ${typeName}
-  </div>
-</div>
-<div class="supplier-block">
-  <b>Поставщик:</b> ${supplier.name} &nbsp;·&nbsp;
-  ${supplier.delivery===0?"Самовывоз":`Доставка ${supplier.delivery} дн.`} &nbsp;·&nbsp;
-  ${supplier.phone}
-</div>
-<table>
-  <thead><tr>
-    <th>Наименование</th>
-    <th class="c">Количество</th>
-    <th class="r">Цена</th>
-    <th class="r">Сумма</th>
-  </tr></thead>
-  <tbody>${rows}
-    <tr>
-      <td class="total-row" colspan="3"><b>Итого к оплате</b></td>
-      <td class="total-row r">${new Intl.NumberFormat("ru-RU").format(total)} ₽</td>
-    </tr>
-  </tbody>
-</table>
-<div class="footer">
-  Коммерческое предложение действительно 14 дней с даты выставления.<br/>
-  Цены указаны с НДС. Доставка рассчитывается отдельно.<br/>
-  PLATFORMA — кровельные и фасадные материалы, Богородский р-н МО.
-</div>
-</body></html>`);
-    w.document.close();
-    setTimeout(()=>w.print(),500);
+  async function loadQuote(){
+    setQuoteLoading(true); setQuoteError(null);
+    try{
+      const q = await apiCreateQuote(calcId, offer.supplier.id);
+      setQuote(q);
+    }catch(e){
+      setQuoteError(e.message);
+    }finally{
+      setQuoteLoading(false);
+    }
+  }
+
+  React.useEffect(()=>{ loadQuote(); }, []);
+
+  async function sendRequest(){
+    if(!name||!phone) return;
+    setSending(true); setSendError(null);
+    try{
+      await apiSendRequest({quote_id: quote.quote_id, supplier_id: offer.supplier.id, name, phone});
+      setSent(true);
+    }catch(e){
+      setSendError(e.message);
+    }finally{
+      setSending(false);
+    }
   }
 
   return (
@@ -404,62 +431,82 @@ function QuoteView({items, supplier, calcType, onBack, onNew}){
       {/* Header */}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"1.5rem"}}>
         <div>
-          <div style={{fontSize:"11px",color:"var(--text3)",letterSpacing:"0.5px",textTransform:"uppercase"}}>{num} · {date}</div>
+          <div style={{fontSize:"11px",color:"var(--text3)",letterSpacing:"0.5px",textTransform:"uppercase"}}>
+            {quote ? quote.number : "..."}
+          </div>
           <h1 style={{fontSize:"22px",fontWeight:"700",letterSpacing:"-0.5px",marginTop:"4px"}}>Коммерческое предложение</h1>
           <div style={{fontSize:"13px",color:"var(--text2)",marginTop:"2px"}}>Тип: {typeName}</div>
         </div>
         <button className="btn-ghost" onClick={onBack} style={{flexShrink:0}}>← Назад</button>
       </div>
 
-      {/* Summary cards */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"10px",marginBottom:"1.25rem"}}>
-        {[
-          {label:"Поставщик",    value:supplier.name,   sub:supplier.region},
-          {label:"Доставка",     value:supplier.delivery===0?"Самовывоз":`${supplier.delivery} дня`, sub:supplier.phone},
-          {label:"Сумма сметы",  value:fmt(total),      sub:"Включая скидку"},
-        ].map(({label,value,sub})=>(
-          <div key={label} style={{background:"var(--surface2)",borderRadius:"var(--r-md)",padding:"12px"}}>
-            <div style={{fontSize:"12px",color:"var(--text3)"}}>{label}</div>
-            <div style={{fontWeight:"600",fontSize:"15px",marginTop:"4px",lineHeight:1.2}}>{value}</div>
-            <div style={{fontSize:"11px",color:"var(--text3)",marginTop:"2px"}}>{sub}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Spec table */}
-      <div className="card" style={{marginBottom:"1rem"}}>
-        <div style={{fontSize:"12px",fontWeight:"600",color:"var(--text3)",textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"14px"}}>Спецификация</div>
-        <MaterialsTable items={items} factor={f}/>
-      </div>
-
-      {/* Request form */}
-      {!sent ? (
-        <div className="card" style={{marginBottom:"1rem"}}>
-          <div style={{fontWeight:"600",fontSize:"15px",marginBottom:"12px"}}>Оставить заявку поставщику</div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginBottom:"12px"}}>
-            <input placeholder="Ваше имя" value={name} onChange={e=>setName(e.target.value)}/>
-            <input placeholder="Телефон" value={phone} onChange={e=>setPhone(e.target.value)} type="tel"/>
-          </div>
-          <button className="btn" style={{width:"100%"}} onClick={()=>{if(name&&phone)setSent(true)}}>
-            Отправить заявку → {supplier.name}
-          </button>
-          {(!name||!phone)&&<div style={{fontSize:"12px",color:"var(--text3)",marginTop:"6px",textAlign:"center"}}>Заполните имя и телефон</div>}
-        </div>
-      ) : (
-        <div style={{padding:"1rem 1.25rem",background:"var(--green-bg)",border:"0.5px solid var(--green-border)",borderRadius:"var(--r-lg)",marginBottom:"1rem",display:"flex",alignItems:"center",gap:"12px"}}>
-          <div style={{fontSize:"24px"}}>✓</div>
-          <div>
-            <div style={{fontWeight:"600",color:"var(--green-fg)"}}>Заявка отправлена!</div>
-            <div style={{fontSize:"13px",color:"var(--green-fg)",marginTop:"2px"}}>{supplier.name} свяжется с вами по номеру {phone} в течение 2 часов.</div>
-          </div>
+      {quoteLoading && (
+        <div className="card" style={{textAlign:"center",color:"var(--text2)",fontSize:"14px"}}>
+          <span className="spin" style={{borderTopColor:"var(--text)",borderColor:"rgba(0,0,0,0.15)"}}/>
+          Формируем смету...
         </div>
       )}
 
-      {/* Actions */}
-      <div style={{display:"flex",gap:"10px"}}>
-        <button className="btn-ghost" style={{flex:1}} onClick={printPDF}>⬇ Скачать PDF</button>
-        <button className="btn" style={{flex:1}} onClick={onNew}>Новый расчёт</button>
-      </div>
+      {quoteError && <ErrorBox message={quoteError} onRetry={loadQuote}/>}
+
+      {quote && (
+        <React.Fragment>
+          {/* Summary cards */}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"10px",marginBottom:"1.25rem"}}>
+            {[
+              {label:"Поставщик",    value:offer.supplier.name,   sub:offer.supplier.region},
+              {label:"Доставка",     value:offer.supplier.delivery_days===0?"Самовывоз":`${offer.supplier.delivery_days} дня`, sub:offer.supplier.phone},
+              {label:"Сумма сметы",  value:fmt(quote.total),      sub:`${Math.round(offer.coverage*100)}% в наличии`},
+            ].map(({label,value,sub})=>(
+              <div key={label} style={{background:"var(--surface2)",borderRadius:"var(--r-md)",padding:"12px"}}>
+                <div style={{fontSize:"12px",color:"var(--text3)"}}>{label}</div>
+                <div style={{fontWeight:"600",fontSize:"15px",marginTop:"4px",lineHeight:1.2}}>{value}</div>
+                <div style={{fontSize:"11px",color:"var(--text3)",marginTop:"2px"}}>{sub}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Spec table */}
+          <div className="card" style={{marginBottom:"1rem"}}>
+            <div style={{fontSize:"12px",fontWeight:"600",color:"var(--text3)",textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"14px"}}>Спецификация</div>
+            <PricedItemsTable itemsPriced={quote.items} total={quote.total}/>
+          </div>
+
+          {/* Request form */}
+          {!sent ? (
+            <div className="card" style={{marginBottom:"1rem"}}>
+              <div style={{fontWeight:"600",fontSize:"15px",marginBottom:"12px"}}>Оставить заявку поставщику</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginBottom:"12px"}}>
+                <input placeholder="Ваше имя" value={name} onChange={e=>setName(e.target.value)}/>
+                <input placeholder="Телефон" value={phone} onChange={e=>setPhone(e.target.value)} type="tel" inputMode="tel"/>
+              </div>
+              {sendError && <ErrorBox message={sendError}/>}
+              <button className="btn" style={{width:"100%"}} disabled={!name||!phone||sending} onClick={sendRequest}>
+                {sending && <span className="spin"/>}
+                {sending ? "Отправляем..." : `Отправить заявку → ${offer.supplier.name}`}
+              </button>
+              {(!name||!phone)&&<div style={{fontSize:"12px",color:"var(--text3)",marginTop:"6px",textAlign:"center"}}>Заполните имя и телефон</div>}
+            </div>
+          ) : (
+            <div style={{padding:"1rem 1.25rem",background:"var(--green-bg)",border:"0.5px solid var(--green-border)",borderRadius:"var(--r-lg)",marginBottom:"1rem",display:"flex",alignItems:"center",gap:"12px"}}>
+              <div style={{fontSize:"24px"}}>✓</div>
+              <div>
+                <div style={{fontWeight:"600",color:"var(--green-fg)"}}>Заявка отправлена!</div>
+                <div style={{fontSize:"13px",color:"var(--green-fg)",marginTop:"2px"}}>Менеджер {offer.supplier.name} свяжется с вами по номеру {phone} в течение 2 часов.</div>
+              </div>
+            </div>
+          )}
+
+          {/* Actions */}
+          <div style={{display:"flex",gap:"10px"}}>
+            <a className="btn-ghost" style={{flex:1,textAlign:"center",textDecoration:"none",display:"block"}}
+               href={`${API_BASE}/api/quotes/${quote.quote_id}/pdf`} target="_blank" rel="noreferrer">
+              ⬇ Скачать PDF
+            </a>
+            <button className="btn" style={{flex:1}} onClick={onNew}>Новый расчёт</button>
+          </div>
+        </React.Fragment>
+      )}
     </div>
   );
 }
@@ -479,15 +526,15 @@ function App(){
   const[screen,setScreen] = useState("home");    // home | calc | quote
   const[calcType,setCalcType] = useState(null);
   const[step,setStep] = useState(0);
-  const[items,setItems] = useState([]);
-  const[supplier,setSupplier] = useState(null);
+  const[calcResult,setCalcResult] = useState(null);  // {calc_id, items, base_total, suppliers}
+  const[offer,setOffer] = useState(null);             // выбранное предложение поставщика
 
   function startCalc(type){
-    setCalcType(type); setStep(0); setItems([]); setSupplier(null); setScreen("calc");
+    setCalcType(type); setStep(0); setCalcResult(null); setOffer(null); setScreen("calc");
   }
-  function onResult(r){ setItems(r); setStep(1); }
-  function toQuote(){ if(supplier) setScreen("quote"); }
-  function reset(){ setScreen("home"); setCalcType(null); setStep(0); setItems([]); setSupplier(null); }
+  function onResult(r){ setCalcResult(r); setStep(1); }
+  function toQuote(){ if(offer) setScreen("quote"); }
+  function reset(){ setScreen("home"); setCalcType(null); setStep(0); setCalcResult(null); setOffer(null); }
 
   /* ── HOME ── */
   if(screen==="home") return (
@@ -501,7 +548,7 @@ function App(){
         Рассчитайте материалы<br/>за 2 минуты
       </h1>
       <p style={{color:"var(--text2)",fontSize:"15px",marginBottom:"28px"}}>
-        Точная спецификация с запасом, сравнение цен поставщиков и готовая PDF-смета.
+        Точная спецификация с запасом, сравнение цен реальных поставщиков и готовая PDF-смета.
       </p>
 
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:"12px",marginBottom:"36px"}}>
@@ -523,7 +570,7 @@ function App(){
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:"10px"}}>
           {[
             ["📐","Точный расчёт","с запасом и всеми комплектующими"],
-            ["🏪","3 поставщика","сравнение цен по вашему региону"],
+            ["🏪","Реальные поставщики","живое сравнение цен по региону"],
             ["📄","PDF смета","как коммерческое предложение"],
             ["🚚","Доставка","по Московской области"],
           ].map(([ic,t,d])=>(
@@ -540,7 +587,7 @@ function App(){
 
   /* ── QUOTE ── */
   if(screen==="quote") return (
-    <QuoteView items={items} supplier={supplier} calcType={calcType} onBack={()=>setScreen("calc")} onNew={reset}/>
+    <QuoteView calcId={calcResult.calc_id} calcType={calcType} offer={offer} onBack={()=>setScreen("calc")} onNew={reset}/>
   );
 
   /* ── CALCULATOR ── */
@@ -570,10 +617,10 @@ function App(){
         )}
 
         {/* Step 1 — Materials */}
-        {step===1 && items.length>0 && (
+        {step===1 && calcResult && (
           <div>
             <div style={{fontWeight:"600",fontSize:"15px",marginBottom:"16px"}}>Спецификация материалов</div>
-            <MaterialsTable items={items}/>
+            <MaterialsTable items={calcResult.items}/>
             <div style={{display:"flex",gap:"8px",marginTop:"1.25rem"}}>
               <button className="btn-ghost" style={{flex:1}} onClick={()=>setStep(0)}>← Изменить</button>
               <button className="btn" style={{flex:2}} onClick={()=>setStep(2)}>Выбрать поставщика →</button>
@@ -582,17 +629,17 @@ function App(){
         )}
 
         {/* Step 2 — Suppliers */}
-        {step===2 && (
+        {step===2 && calcResult && (
           <div>
             <div style={{fontWeight:"600",fontSize:"15px",marginBottom:"14px"}}>Сравнение поставщиков</div>
-            <SupplierCards items={items} selected={supplier} onSelect={setSupplier}/>
+            <SupplierCards offers={calcResult.suppliers} selected={offer} onSelect={setOffer}/>
             <div style={{display:"flex",gap:"8px",marginTop:"1.25rem"}}>
               <button className="btn-ghost" style={{flex:1}} onClick={()=>setStep(1)}>← Назад</button>
-              <button className="btn" style={{flex:2,opacity:supplier?1:0.35}} disabled={!supplier} onClick={toQuote}>
+              <button className="btn" style={{flex:2,opacity:offer?1:0.35}} disabled={!offer} onClick={toQuote}>
                 Сформировать смету →
               </button>
             </div>
-            {!supplier && <div style={{fontSize:"12px",color:"var(--text3)",textAlign:"center",marginTop:"8px"}}>Выберите поставщика</div>}
+            {!offer && <div style={{fontSize:"12px",color:"var(--text3)",textAlign:"center",marginTop:"8px"}}>Выберите поставщика</div>}
           </div>
         )}
       </div>
