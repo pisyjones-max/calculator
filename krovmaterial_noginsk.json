@@ -1,0 +1,27 @@
+{
+  "supplier": {
+    "id": "krovmaterial_noginsk",
+    "name": "КровМатериалы",
+    "region": "Ногинск, Богородский р-н",
+    "delivery_days": 1,
+    "min_order_rub": 3000,
+    "phone": "+7 (496) 234-56-78",
+    "website": "https://krovmaterial-noginsk.ru",
+    "source_url": "https://krovmaterial-noginsk.ru/catalog/",
+    "parsed_at": "2025-05-29T10:00:00"
+  },
+  "prices": [
+    { "slug": "metal_tile_grand",       "price": 618,  "in_stock": true  },
+    { "slug": "metal_tile_monterrey",   "price": 684,  "in_stock": true  },
+    { "slug": "profnastil_c20",         "price": 399,  "in_stock": true  },
+    { "slug": "soft_roof_shinglas",     "price": 456,  "in_stock": true  },
+    { "slug": "ridge_element_3m",       "price": 551,  "in_stock": true  },
+    { "slug": "hydro_izospan_a",        "price": 43,   "in_stock": true  },
+    { "slug": "batten_25x100",          "price": 26,   "in_stock": true  },
+    { "slug": "screw_roofing_250",      "price": 304,  "in_stock": true  },
+    { "slug": "siding_vinyl_docke",     "price": 370,  "in_stock": true  },
+    { "slug": "mineral_wool_knauf_3m2", "price": 1757, "in_stock": true  },
+    { "slug": "foam_psb25_3m2",         "price": 1140, "in_stock": true  },
+    { "slug": "xps_penoplex_3m2",       "price": 1995, "in_stock": true  }
+  ]
+}

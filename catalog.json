@@ -1,0 +1,33 @@
+{
+  "_comment": "Эталонный каталог. Каждый поставщик привязывает свои товары к этим slug-ам.",
+  "products": [
+    { "slug": "metal_tile_grand",       "name": "Металлочерепица Grand Line",     "unit": "м²",    "category": "roofing" },
+    { "slug": "metal_tile_monterrey",   "name": "Металлочерепица Monterrey",      "unit": "м²",    "category": "roofing" },
+    { "slug": "profnastil_c20",         "name": "Профнастил С-20",                "unit": "м²",    "category": "roofing" },
+    { "slug": "profnastil_nс35",        "name": "Профнастил НС-35",               "unit": "м²",    "category": "roofing" },
+    { "slug": "soft_roof_shinglas",     "name": "Мягкая кровля Shinglas",         "unit": "м²",    "category": "roofing" },
+    { "slug": "soft_roof_tegola",       "name": "Мягкая кровля Tegola",           "unit": "м²",    "category": "roofing" },
+    { "slug": "ridge_element_3m",       "name": "Конёк (планка 3м)",              "unit": "шт",    "category": "roofing_elem" },
+    { "slug": "hydro_izospan_a",        "name": "Гидроизоляция Изоспан А",        "unit": "м²",    "category": "roofing_elem" },
+    { "slug": "batten_25x100",          "name": "Обрешётка доска 25×100мм",       "unit": "пог.м", "category": "wood" },
+    { "slug": "screw_roofing_250",      "name": "Саморезы кровельные уп.250шт",   "unit": "уп",    "category": "fastener" },
+    { "slug": "wind_plank",             "name": "Ветровая планка",                "unit": "шт",    "category": "roofing_elem" },
+    { "slug": "ridge_seal",             "name": "Уплотнитель конька",             "unit": "пог.м", "category": "roofing_elem" },
+    { "slug": "siding_vinyl_docke",     "name": "Сайдинг виниловый Döcke",        "unit": "шт",    "category": "facade" },
+    { "slug": "facade_panel_docke",     "name": "Фасадная панель Döcke",          "unit": "шт",    "category": "facade" },
+    { "slug": "fiber_cement_hbr",       "name": "Хаубер фиброцемент",             "unit": "шт",    "category": "facade" },
+    { "slug": "outer_corner_3m",        "name": "Внешний угол 3м",                "unit": "шт",    "category": "facade_elem" },
+    { "slug": "starter_strip",          "name": "Стартовая планка",               "unit": "шт",    "category": "facade_elem" },
+    { "slug": "finish_strip",           "name": "Финишная планка",                "unit": "шт",    "category": "facade_elem" },
+    { "slug": "j_profile",             "name": "J-профиль оконный",              "unit": "шт",    "category": "facade_elem" },
+    { "slug": "screw_facade_250",       "name": "Саморезы фасадные уп.250шт",    "unit": "уп",    "category": "fastener" },
+    { "slug": "window_sill_150",        "name": "Подоконник 150мм",               "unit": "шт",    "category": "facade_elem" },
+    { "slug": "mineral_wool_knauf_3m2", "name": "Минвата КНАУФ уп.3м²",          "unit": "уп",    "category": "insulation" },
+    { "slug": "foam_psb25_3m2",         "name": "Пенопласт ПСБ-25 уп.3м²",       "unit": "уп",    "category": "insulation" },
+    { "slug": "xps_penoplex_3m2",       "name": "Пенополистирол XPS уп.3м²",     "unit": "уп",    "category": "insulation" },
+    { "slug": "dowel_umbrella",         "name": "Дюбель-зонтик",                 "unit": "шт",    "category": "fastener" },
+    { "slug": "armor_mesh_m2",          "name": "Армировочная сетка",             "unit": "м²",    "category": "insulation_elem" },
+    { "slug": "facade_glue_25kg",       "name": "Фасадный клей меш.25кг",        "unit": "меш",   "category": "insulation_elem" },
+    { "slug": "vapor_barrier_m2",       "name": "Пароизоляция",                  "unit": "м²",    "category": "insulation_elem" }
+  ]
+}

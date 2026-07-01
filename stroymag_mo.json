@@ -1,0 +1,28 @@
+{
+  "supplier": {
+    "id": "stroymag_mo",
+    "name": "СтройМаркет МО",
+    "region": "Москва и область",
+    "delivery_days": 2,
+    "min_order_rub": 5000,
+    "phone": "+7 (495) 123-45-67",
+    "website": "https://stroymag-mo.ru",
+    "source_url": "https://stroymag-mo.ru/catalog/krovlya/",
+    "parsed_at": "2025-05-29T10:00:00"
+  },
+  "prices": [
+    { "slug": "metal_tile_grand",       "price": 650,  "in_stock": true,  "url": "https://stroymag-mo.ru/metal_tile_grand" },
+    { "slug": "metal_tile_monterrey",   "price": 720,  "in_stock": true,  "url": "https://stroymag-mo.ru/metal_tile_monterrey" },
+    { "slug": "profnastil_c20",         "price": 420,  "in_stock": true,  "url": "https://stroymag-mo.ru/profnastil_c20" },
+    { "slug": "soft_roof_shinglas",     "price": 480,  "in_stock": false, "url": "https://stroymag-mo.ru/soft_roof_shinglas" },
+    { "slug": "ridge_element_3m",       "price": 580,  "in_stock": true,  "url": null },
+    { "slug": "hydro_izospan_a",        "price": 45,   "in_stock": true,  "url": null },
+    { "slug": "batten_25x100",          "price": 28,   "in_stock": true,  "url": null },
+    { "slug": "screw_roofing_250",      "price": 320,  "in_stock": true,  "url": null },
+    { "slug": "siding_vinyl_docke",     "price": 390,  "in_stock": true,  "url": null },
+    { "slug": "facade_panel_docke",     "price": 550,  "in_stock": true,  "url": null },
+    { "slug": "mineral_wool_knauf_3m2", "price": 1850, "in_stock": true,  "url": null },
+    { "slug": "foam_psb25_3m2",         "price": 1200, "in_stock": true,  "url": null },
+    { "slug": "xps_penoplex_3m2",       "price": 2100, "in_stock": false, "url": null }
+  ]
+}
