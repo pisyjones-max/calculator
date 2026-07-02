@@ -8,10 +8,17 @@ from datetime import datetime
 import random
 import os
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()  # подхватывает .env локально; на проде переменные обычно задаются платформой
+except ImportError:
+    pass
+
 from app.database import get_db, create_tables, Calculation, CalculationItem, Quote, QuoteRequest, Supplier
 from app.services.calculators import calc_roofing, calc_facade, calc_insulation, CalcItem
 from app.services.supplier_matcher import match_suppliers
 from app.services.pdf_generator import generate_pdf
+from app.services.telegram_notifier import notify_new_lead
 
 app = FastAPI(title="PLATFORMA API", version="1.0.0")
 
@@ -220,6 +227,13 @@ def download_pdf(quote_id: int, db: Session = Depends(get_db)):
 
 @app.post("/api/quotes/send-request")
 def send_request(body: SendRequestBody, db: Session = Depends(get_db)):
+    quote = db.query(Quote).filter(Quote.id == body.quote_id).first()
+    if not quote:
+        raise HTTPException(404, "Смета не найдена")
+    supplier = db.query(Supplier).filter(Supplier.id == body.supplier_id).first()
+    if not supplier:
+        raise HTTPException(404, "Поставщик не найден")
+
     req = QuoteRequest(
         quote_id=body.quote_id,
         supplier_id=body.supplier_id,
@@ -229,7 +243,20 @@ def send_request(body: SendRequestBody, db: Session = Depends(get_db)):
     )
     db.add(req)
     db.commit()
-    return {"status": "ok", "message": "Заявка принята."}
+
+    calc = db.query(Calculation).filter(Calculation.id == quote.calc_id).first()
+    notified = notify_new_lead(
+        quote_number=quote.number,
+        quote_id=quote.id,
+        calc_type=calc.calc_type if calc else "",
+        total=quote.total_price,
+        supplier_name=supplier.name,
+        client_name=body.name,
+        client_phone=body.phone,
+        client_email=body.email,
+    )
+
+    return {"status": "ok", "message": "Заявка принята.", "manager_notified": notified}
 
 @app.get("/api/suppliers")
 def list_suppliers(db: Session = Depends(get_db)):

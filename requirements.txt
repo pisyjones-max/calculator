@@ -3,6 +3,8 @@ uvicorn[standard]==0.49.0
 sqlalchemy==2.0.51
 pydantic==2.13.4
 weasyprint==69.0
+httpx==0.28.1
+python-dotenv==1.0.1
 
 # ВАЖНО для деплоя: weasyprint требует системные библиотеки
 # (libpango-1.0-0, libpangocairo-1.0-0, libcairo2, libgdk-pixbuf2.0-0).
