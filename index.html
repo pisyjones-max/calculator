@@ -21,19 +21,31 @@
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--text);line-height:1.5;font-size:15px}
 a{color:inherit}
-input,select{background:var(--surface);color:var(--text);border:0.5px solid var(--border2);border-radius:var(--r-md);padding:9px 12px;font-size:14px;width:100%;outline:none;font-family:inherit;-webkit-appearance:none}
+/* Touch-friendly inputs: min 44px height, 16px font (prevents iOS auto-zoom on focus) */
+input,select{background:var(--surface);color:var(--text);border:0.5px solid var(--border2);border-radius:var(--r-md);padding:12px 14px;font-size:16px;width:100%;outline:none;font-family:inherit;-webkit-appearance:none;min-height:44px}
 input:focus,select:focus{border-color:var(--text);box-shadow:0 0 0 3px rgba(0,0,0,0.07)}
+input.field-invalid,select.field-invalid{border-color:var(--red-border);background:var(--red-bg)}
+.field-error{font-size:12px;color:var(--red-fg);margin-top:5px;line-height:1.3}
 button{font-family:inherit;cursor:pointer;border:none;outline:none;transition:all 0.15s}
-.btn{background:var(--accent);color:var(--accent-fg);border-radius:var(--r-md);padding:11px 20px;font-size:14px;font-weight:500;letter-spacing:-0.1px}
+/* Touch-friendly buttons: min 44px height */
+.btn{background:var(--accent);color:var(--accent-fg);border-radius:var(--r-md);padding:12px 20px;font-size:14px;font-weight:500;letter-spacing:-0.1px;min-height:44px;display:inline-flex;align-items:center;justify-content:center}
 .btn:hover{opacity:0.85}
 .btn:active{transform:scale(0.98)}
 .btn:disabled,.btn[disabled]{opacity:0.35;cursor:not-allowed}
-.btn-ghost{background:transparent;color:var(--text);border:0.5px solid var(--border2);border-radius:var(--r-md);padding:11px 20px;font-size:14px}
+.btn-ghost{background:transparent;color:var(--text);border:0.5px solid var(--border2);border-radius:var(--r-md);padding:12px 20px;font-size:14px;min-height:44px;display:inline-flex;align-items:center;justify-content:center}
 .btn-ghost:hover{background:var(--surface2)}
 .card{background:var(--surface);border:0.5px solid var(--border);border-radius:var(--r-lg);padding:1.25rem}
 select option{background:var(--surface)}
 .spin{width:16px;height:16px;border-radius:50%;border:2px solid rgba(255,255,255,0.35);border-top-color:#fff;display:inline-block;animation:spin 0.7s linear infinite;vertical-align:-3px;margin-right:8px}
 @keyframes spin{to{transform:rotate(360deg)}}
+/* Sticky total bar — fixed to bottom on mobile so the sum is visible without scrolling */
+.sticky-total-spacer{display:none}
+@media (max-width:640px){
+  .sticky-total{position:fixed;left:0;right:0;bottom:0;z-index:50;background:var(--surface);
+    border-top:0.5px solid var(--border);padding:10px 16px calc(10px + env(safe-area-inset-bottom));
+    box-shadow:0 -6px 16px rgba(0,0,0,0.10)}
+  .sticky-total-spacer{display:block;height:96px}
+}
 </style>
 </head>
 <body>
@@ -86,36 +98,87 @@ async function apiSendRequest(body){
 const fmt = n => new Intl.NumberFormat("ru-RU").format(Math.round(n)) + " ₽";
 const CAT_LABELS = {main:"Основной материал",elem:"Элементы и комплектующие",wood:"Деревянные конструкции",fastener:"Крепёж",seal:"Уплотнители"};
 
+// Валидация числового поля на лету — понятный текст ошибки вместо просто disabled-кнопки.
+function validateNumber(value, {label, min, max, integer}={}){
+  if(value===""||value===null||value===undefined||Number.isNaN(value)){
+    return `Укажите ${label.toLowerCase()}`;
+  }
+  if(integer && !Number.isInteger(value)){
+    return `${label}: введите целое число`;
+  }
+  if(min!==undefined && value < min){
+    return `${label}: минимум ${min}`;
+  }
+  if(max!==undefined && value > max){
+    return `${label}: максимум ${max}`;
+  }
+  return null;
+}
+
 /* ── SHARED COMPONENTS ────────────────────────── */
-function FieldRow({label, children}){
+function FieldRow({label, children, error}){
   return (
-    <div style={{display:"grid",gridTemplateColumns:"130px 1fr",gap:"10px",alignItems:"center",marginBottom:"10px"}}>
-      <label style={{fontSize:"13px",color:"var(--text2)"}}>{label}</label>
-      {children}
+    <div style={{marginBottom:"10px"}}>
+      <div style={{display:"grid",gridTemplateColumns:"130px 1fr",gap:"10px",alignItems:"center"}}>
+        <label style={{fontSize:"13px",color:"var(--text2)"}}>{label}</label>
+        {children}
+      </div>
+      {error && <div className="field-error">{error}</div>}
     </div>
   );
 }
 
-function StepBar({steps, current}){
+// StepBar: пройденные шаги (i < current) кликабельны — можно вернуться назад
+// без потери введённых данных (данные форм живут в состоянии App, а не форм).
+function StepBar({steps, current, onStepClick}){
   return (
     <div style={{display:"flex",gap:"0",marginBottom:"1.5rem",position:"relative"}}>
       <div style={{position:"absolute",top:"14px",left:"14px",right:"14px",height:"1px",background:"var(--border2)"}}/>
-      {steps.map((s,i) => (
-        <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:"6px",position:"relative",zIndex:1}}>
-          <div style={{
-            width:"28px",height:"28px",borderRadius:"50%",
-            background: i <= current ? "var(--accent)" : "var(--bg)",
-            border: i <= current ? "none" : "1px solid var(--border2)",
-            color: i <= current ? "var(--accent-fg)" : "var(--text3)",
-            display:"flex",alignItems:"center",justifyContent:"center",
-            fontSize:"12px",fontWeight:"500",
-          }}>
-            {i < current ? "✓" : i+1}
-          </div>
-          <span style={{fontSize:"11px",color:i===current?"var(--text)":"var(--text3)",textAlign:"center",lineHeight:1.2}}>{s}</span>
-        </div>
-      ))}
+      {steps.map((s,i) => {
+        const clickable = !!onStepClick && i < current;
+        const Tag = clickable ? "button" : "div";
+        return (
+          <Tag key={i}
+            onClick={clickable ? () => onStepClick(i) : undefined}
+            aria-current={i===current ? "step" : undefined}
+            style={{
+              flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:"6px",
+              position:"relative",zIndex:1,background:"none",border:"none",font:"inherit",
+              color:"inherit",padding:"8px 2px",minHeight:"44px",
+              cursor: clickable ? "pointer" : "default",
+            }}>
+            <div style={{
+              width:"28px",height:"28px",borderRadius:"50%",
+              background: i <= current ? "var(--accent)" : "var(--bg)",
+              border: i <= current ? "none" : "1px solid var(--border2)",
+              color: i <= current ? "var(--accent-fg)" : "var(--text3)",
+              display:"flex",alignItems:"center",justifyContent:"center",
+              fontSize:"12px",fontWeight:"500",
+            }}>
+              {i < current ? "✓" : i+1}
+            </div>
+            <span style={{fontSize:"11px",color:i===current?"var(--text)":"var(--text3)",textAlign:"center",lineHeight:1.2}}>{s}</span>
+          </Tag>
+        );
+      })}
     </div>
+  );
+}
+
+// Sticky-блок с итоговой суммой — на мобильном фиксируется снизу экрана,
+// чтобы итог и действия были видны сразу, без скролла.
+function StickyTotal({label, amount, children}){
+  return (
+    <React.Fragment>
+      <div className="sticky-total">
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:"12px",marginBottom: children ? "10px" : 0}}>
+          <span style={{fontSize:"13px",color:"var(--text2)"}}>{label}</span>
+          <span style={{fontSize:"20px",fontWeight:"700"}}>{amount}</span>
+        </div>
+        {children}
+      </div>
+      <div className="sticky-total-spacer"/>
+    </React.Fragment>
   );
 }
 
@@ -137,18 +200,27 @@ function ErrorBox({message, onRetry}){
 }
 
 /* ── ROOFING FORM ─────────────────────────────── */
-function RoofingForm({onResult}){
-  const[p,setP] = useState({length:10,width:8,angle:30,material:"metal_tile_grand"});
+// params/setParams приходят из App — состояние формы переживает переход
+// на другие шаги и обратно (кнопка «← Изменить» / клик по StepBar).
+function RoofingForm({onResult, params:p, setParams:setP}){
   const[loading,setLoading] = useState(false);
   const[error,setError] = useState(null);
   const up = (k,v) => setP(x=>({...x,[k]:v}));
 
+  const errors = {
+    length: validateNumber(p.length, {label:"Длина дома", min:3, max:60}),
+    width:  validateNumber(p.width,  {label:"Ширина дома", min:3, max:30}),
+    angle:  validateNumber(p.angle,  {label:"Угол ската", min:10, max:60}),
+  };
+  const hasErrors = Object.values(errors).some(Boolean);
+
   // Предварительная площадь для наглядности — точные цифры и состав
   // материалов приходят с сервера после нажатия «Рассчитать»
   const slopeLen = (p.width/2) / Math.cos(p.angle*Math.PI/180);
-  const areaPreview = Math.round(p.length * slopeLen * 2 * 1.10);
+  const areaPreview = hasErrors ? null : Math.round(p.length * slopeLen * 2 * 1.10);
 
   async function submit(){
+    if(hasErrors) return;
     setLoading(true); setError(null);
     try{
       const r = await apiCalculate("roofing", p);
@@ -163,9 +235,15 @@ function RoofingForm({onResult}){
   return (
     <div>
       <InfoBox>Двускатная крыша. Все размеры — по внешним габаритам.</InfoBox>
-      <FieldRow label="Длина дома (м)"><input type="number" inputMode="decimal" value={p.length} min="3" max="60" step="0.5" onChange={e=>up("length",+e.target.value)}/></FieldRow>
-      <FieldRow label="Ширина дома (м)"><input type="number" inputMode="decimal" value={p.width} min="3" max="30" step="0.5" onChange={e=>up("width",+e.target.value)}/></FieldRow>
-      <FieldRow label="Угол ската (°)"><input type="number" inputMode="decimal" value={p.angle} min="10" max="60" step="5" onChange={e=>up("angle",+e.target.value)}/></FieldRow>
+      <FieldRow label="Длина дома (м)" error={errors.length}>
+        <input type="number" inputMode="decimal" className={errors.length?"field-invalid":""} value={p.length} min="3" max="60" step="0.5" onChange={e=>up("length",+e.target.value)}/>
+      </FieldRow>
+      <FieldRow label="Ширина дома (м)" error={errors.width}>
+        <input type="number" inputMode="decimal" className={errors.width?"field-invalid":""} value={p.width} min="3" max="30" step="0.5" onChange={e=>up("width",+e.target.value)}/>
+      </FieldRow>
+      <FieldRow label="Угол ската (°)" error={errors.angle}>
+        <input type="number" inputMode="decimal" className={errors.angle?"field-invalid":""} value={p.angle} min="10" max="60" step="5" onChange={e=>up("angle",+e.target.value)}/>
+      </FieldRow>
       <FieldRow label="Материал">
         <select value={p.material} onChange={e=>up("material",e.target.value)}>
           <option value="metal_tile_grand">Металлочерепица Grand Line</option>
@@ -174,27 +252,39 @@ function RoofingForm({onResult}){
           <option value="soft_roof_shinglas">Мягкая кровля Shinglas</option>
         </select>
       </FieldRow>
-      <div style={{padding:"12px",background:"var(--green-bg)",borderRadius:"var(--r-md)",marginBottom:"1.25rem",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <span style={{fontSize:"13px",color:"var(--green-fg)"}}>Площадь кровли (с нахлёстом 10%)</span>
-        <span style={{fontSize:"20px",fontWeight:"600",color:"var(--green-fg)"}}>{areaPreview} м²</span>
-      </div>
+      {!hasErrors && (
+        <div style={{padding:"12px",background:"var(--green-bg)",borderRadius:"var(--r-md)",marginBottom:"1.25rem",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <span style={{fontSize:"13px",color:"var(--green-fg)"}}>Площадь кровли (с нахлёстом 10%)</span>
+          <span style={{fontSize:"20px",fontWeight:"600",color:"var(--green-fg)"}}>{areaPreview} м²</span>
+        </div>
+      )}
       {error && <ErrorBox message={error} onRetry={submit}/>}
-      <button className="btn" style={{width:"100%"}} disabled={loading} onClick={submit}>
+      <button className="btn" style={{width:"100%"}} disabled={loading||hasErrors} onClick={submit}>
         {loading && <span className="spin"/>}{loading ? "Считаем..." : "Рассчитать →"}
       </button>
+      {hasErrors && !loading && <div className="field-error" style={{textAlign:"center",marginTop:"8px"}}>Исправьте поля выше, чтобы продолжить</div>}
     </div>
   );
 }
 
 /* ── FACADE FORM ──────────────────────────────── */
-function FacadeForm({onResult}){
-  const[p,setP] = useState({length:10,width:8,height:3,windows:6,doors:2,material:"siding"});
+function FacadeForm({onResult, params:p, setParams:setP}){
   const[loading,setLoading] = useState(false);
   const[error,setError] = useState(null);
   const up = (k,v) => setP(x=>({...x,[k]:v}));
-  const netPreview = Math.round(2*(p.length+p.width)*p.height - (p.windows*1.5+p.doors*2.1));
+
+  const errors = {
+    length:  validateNumber(p.length,  {label:"Длина дома", min:3, max:60}),
+    width:   validateNumber(p.width,   {label:"Ширина дома", min:3, max:30}),
+    height:  validateNumber(p.height,  {label:"Высота стен", min:2, max:12}),
+    windows: validateNumber(p.windows, {label:"Окна", min:0, max:40, integer:true}),
+    doors:   validateNumber(p.doors,   {label:"Двери", min:0, max:10, integer:true}),
+  };
+  const hasErrors = Object.values(errors).some(Boolean);
+  const netPreview = hasErrors ? null : Math.round(2*(p.length+p.width)*p.height - (p.windows*1.5+p.doors*2.1));
 
   async function submit(){
+    if(hasErrors) return;
     setLoading(true); setError(null);
     try{
       const r = await apiCalculate("facade", p);
@@ -209,11 +299,21 @@ function FacadeForm({onResult}){
   return (
     <div>
       <InfoBox>Периметр × высота за вычетом оконных и дверных проёмов.</InfoBox>
-      <FieldRow label="Длина дома (м)"><input type="number" inputMode="decimal" value={p.length} min="3" max="60" step="0.5" onChange={e=>up("length",+e.target.value)}/></FieldRow>
-      <FieldRow label="Ширина дома (м)"><input type="number" inputMode="decimal" value={p.width} min="3" max="30" step="0.5" onChange={e=>up("width",+e.target.value)}/></FieldRow>
-      <FieldRow label="Высота стен (м)"><input type="number" inputMode="decimal" value={p.height} min="2" max="12" step="0.5" onChange={e=>up("height",+e.target.value)}/></FieldRow>
-      <FieldRow label="Окна (шт)"><input type="number" inputMode="numeric" value={p.windows} min="0" max="40" onChange={e=>up("windows",+e.target.value)}/></FieldRow>
-      <FieldRow label="Двери (шт)"><input type="number" inputMode="numeric" value={p.doors} min="0" max="10" onChange={e=>up("doors",+e.target.value)}/></FieldRow>
+      <FieldRow label="Длина дома (м)" error={errors.length}>
+        <input type="number" inputMode="decimal" className={errors.length?"field-invalid":""} value={p.length} min="3" max="60" step="0.5" onChange={e=>up("length",+e.target.value)}/>
+      </FieldRow>
+      <FieldRow label="Ширина дома (м)" error={errors.width}>
+        <input type="number" inputMode="decimal" className={errors.width?"field-invalid":""} value={p.width} min="3" max="30" step="0.5" onChange={e=>up("width",+e.target.value)}/>
+      </FieldRow>
+      <FieldRow label="Высота стен (м)" error={errors.height}>
+        <input type="number" inputMode="decimal" className={errors.height?"field-invalid":""} value={p.height} min="2" max="12" step="0.5" onChange={e=>up("height",+e.target.value)}/>
+      </FieldRow>
+      <FieldRow label="Окна (шт)" error={errors.windows}>
+        <input type="number" inputMode="numeric" className={errors.windows?"field-invalid":""} value={p.windows} min="0" max="40" onChange={e=>up("windows",+e.target.value)}/>
+      </FieldRow>
+      <FieldRow label="Двери (шт)" error={errors.doors}>
+        <input type="number" inputMode="numeric" className={errors.doors?"field-invalid":""} value={p.doors} min="0" max="10" onChange={e=>up("doors",+e.target.value)}/>
+      </FieldRow>
       <FieldRow label="Материал">
         <select value={p.material} onChange={e=>up("material",e.target.value)}>
           <option value="siding">Виниловый сайдинг Döcke</option>
@@ -221,26 +321,34 @@ function FacadeForm({onResult}){
           <option value="fiber">Хаубер (фиброцемент)</option>
         </select>
       </FieldRow>
-      <div style={{padding:"12px",background:"var(--green-bg)",borderRadius:"var(--r-md)",marginBottom:"1.25rem",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <span style={{fontSize:"13px",color:"var(--green-fg)"}}>Площадь фасада (чистая)</span>
-        <span style={{fontSize:"20px",fontWeight:"600",color:"var(--green-fg)"}}>{netPreview} м²</span>
-      </div>
+      {!hasErrors && (
+        <div style={{padding:"12px",background:"var(--green-bg)",borderRadius:"var(--r-md)",marginBottom:"1.25rem",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <span style={{fontSize:"13px",color:"var(--green-fg)"}}>Площадь фасада (чистая)</span>
+          <span style={{fontSize:"20px",fontWeight:"600",color:"var(--green-fg)"}}>{netPreview} м²</span>
+        </div>
+      )}
       {error && <ErrorBox message={error} onRetry={submit}/>}
-      <button className="btn" style={{width:"100%"}} disabled={loading} onClick={submit}>
+      <button className="btn" style={{width:"100%"}} disabled={loading||hasErrors} onClick={submit}>
         {loading && <span className="spin"/>}{loading ? "Считаем..." : "Рассчитать →"}
       </button>
+      {hasErrors && !loading && <div className="field-error" style={{textAlign:"center",marginTop:"8px"}}>Исправьте поля выше, чтобы продолжить</div>}
     </div>
   );
 }
 
 /* ── INSULATION FORM ──────────────────────────── */
-function InsulationForm({onResult}){
-  const[p,setP] = useState({area:80,thickness:0.15,material:"mineral"});
+function InsulationForm({onResult, params:p, setParams:setP}){
   const[loading,setLoading] = useState(false);
   const[error,setError] = useState(null);
   const up = (k,v) => setP(x=>({...x,[k]:v}));
 
+  const errors = {
+    area: validateNumber(p.area, {label:"Площадь", min:5, max:1000}),
+  };
+  const hasErrors = Object.values(errors).some(Boolean);
+
   async function submit(){
+    if(hasErrors) return;
     setLoading(true); setError(null);
     try{
       const r = await apiCalculate("insulation", p);
@@ -255,7 +363,9 @@ function InsulationForm({onResult}){
   return (
     <div>
       <InfoBox>Расчёт по площади и требуемой толщине. Запас 5%.</InfoBox>
-      <FieldRow label="Площадь (м²)"><input type="number" inputMode="decimal" value={p.area} min="5" max="1000" step="5" onChange={e=>up("area",+e.target.value)}/></FieldRow>
+      <FieldRow label="Площадь (м²)" error={errors.area}>
+        <input type="number" inputMode="decimal" className={errors.area?"field-invalid":""} value={p.area} min="5" max="1000" step="5" onChange={e=>up("area",+e.target.value)}/>
+      </FieldRow>
       <FieldRow label="Толщина слоя">
         <select value={p.thickness} onChange={e=>up("thickness",+e.target.value)}>
           <option value={0.05}>50 мм</option>
@@ -272,9 +382,10 @@ function InsulationForm({onResult}){
         </select>
       </FieldRow>
       {error && <ErrorBox message={error} onRetry={submit}/>}
-      <button className="btn" style={{width:"100%",marginTop:"0.5rem"}} disabled={loading} onClick={submit}>
+      <button className="btn" style={{width:"100%",marginTop:"0.5rem"}} disabled={loading||hasErrors} onClick={submit}>
         {loading && <span className="spin"/>}{loading ? "Считаем..." : "Рассчитать →"}
       </button>
+      {hasErrors && !loading && <div className="field-error" style={{textAlign:"center",marginTop:"8px"}}>Исправьте поля выше, чтобы продолжить</div>}
     </div>
   );
 }
@@ -498,13 +609,15 @@ function QuoteView({calcId, calcType, offer, onBack, onNew}){
           )}
 
           {/* Actions */}
-          <div style={{display:"flex",gap:"10px"}}>
-            <a className="btn-ghost" style={{flex:1,textAlign:"center",textDecoration:"none",display:"block"}}
-               href={`${API_BASE}/api/quotes/${quote.quote_id}/pdf`} target="_blank" rel="noreferrer">
-              ⬇ Скачать PDF
-            </a>
-            <button className="btn" style={{flex:1}} onClick={onNew}>Новый расчёт</button>
-          </div>
+          <StickyTotal label="Итого по смете" amount={fmt(quote.total)}>
+            <div style={{display:"flex",gap:"10px"}}>
+              <a className="btn-ghost" style={{flex:1,textAlign:"center",textDecoration:"none",display:"flex"}}
+                 href={`${API_BASE}/api/quotes/${quote.quote_id}/pdf`} target="_blank" rel="noreferrer">
+                ⬇ Скачать PDF
+              </a>
+              <button className="btn" style={{flex:1}} onClick={onNew}>Новый расчёт</button>
+            </div>
+          </StickyTotal>
         </React.Fragment>
       )}
     </div>
@@ -522,6 +635,10 @@ const CALC_TYPES = [
 const STEPS = ["Параметры","Материалы","Поставщик","Смета"];
 
 /* ── MAIN APP ─────────────────────────────────── */
+const DEFAULT_ROOFING = {length:10,width:8,angle:30,material:"metal_tile_grand"};
+const DEFAULT_FACADE = {length:10,width:8,height:3,windows:6,doors:2,material:"siding"};
+const DEFAULT_INSULATION = {area:80,thickness:0.15,material:"mineral"};
+
 function App(){
   const[screen,setScreen] = useState("home");    // home | calc | quote
   const[calcType,setCalcType] = useState(null);
@@ -529,11 +646,25 @@ function App(){
   const[calcResult,setCalcResult] = useState(null);  // {calc_id, items, base_total, suppliers}
   const[offer,setOffer] = useState(null);             // выбранное предложение поставщика
 
+  // Состояние полей форм живёт в App, а не в самих формах — это значит,
+  // что переход на шаг «Материалы»/«Поставщик» и возврат назад (кнопкой
+  // «← Изменить» или кликом по StepBar) не сбрасывает введённые данные.
+  const[roofingParams,setRoofingParams] = useState(DEFAULT_ROOFING);
+  const[facadeParams,setFacadeParams] = useState(DEFAULT_FACADE);
+  const[insulationParams,setInsulationParams] = useState(DEFAULT_INSULATION);
+
   function startCalc(type){
     setCalcType(type); setStep(0); setCalcResult(null); setOffer(null); setScreen("calc");
+    if(type==="roofing") setRoofingParams(DEFAULT_ROOFING);
+    if(type==="facade") setFacadeParams(DEFAULT_FACADE);
+    if(type==="insulation") setInsulationParams(DEFAULT_INSULATION);
   }
   function onResult(r){ setCalcResult(r); setStep(1); }
   function toQuote(){ if(offer) setScreen("quote"); }
+  function goToStep(i){
+    // Назад — можно всегда. Вперёд — только если для целевого шага уже есть данные.
+    if(i===0 || (calcResult && i<=2)) setStep(i);
+  }
   function reset(){ setScreen("home"); setCalcType(null); setStep(0); setCalcResult(null); setOffer(null); }
 
   /* ── HOME ── */
@@ -606,14 +737,14 @@ function App(){
         <button className="btn-ghost" style={{fontSize:"13px",padding:"7px 14px"}} onClick={reset}>✕ Закрыть</button>
       </div>
 
-      <StepBar steps={STEPS} current={step}/>
+      <StepBar steps={STEPS} current={step} onStepClick={goToStep}/>
 
       <div className="card">
         {/* Step 0 — Form */}
         {step===0 && (
-          calcType==="roofing"    ? <RoofingForm    onResult={onResult}/> :
-          calcType==="facade"     ? <FacadeForm     onResult={onResult}/> :
-                                    <InsulationForm  onResult={onResult}/>
+          calcType==="roofing"    ? <RoofingForm    onResult={onResult} params={roofingParams} setParams={setRoofingParams}/> :
+          calcType==="facade"     ? <FacadeForm     onResult={onResult} params={facadeParams} setParams={setFacadeParams}/> :
+                                    <InsulationForm  onResult={onResult} params={insulationParams} setParams={setInsulationParams}/>
         )}
 
         {/* Step 1 — Materials */}
@@ -621,10 +752,14 @@ function App(){
           <div>
             <div style={{fontWeight:"600",fontSize:"15px",marginBottom:"16px"}}>Спецификация материалов</div>
             <MaterialsTable items={calcResult.items}/>
-            <div style={{display:"flex",gap:"8px",marginTop:"1.25rem"}}>
-              <button className="btn-ghost" style={{flex:1}} onClick={()=>setStep(0)}>← Изменить</button>
-              <button className="btn" style={{flex:2}} onClick={()=>setStep(2)}>Выбрать поставщика →</button>
-            </div>
+            <StickyTotal
+              label="Итого (справочно, до выбора поставщика)"
+              amount={fmt(calcResult.items.reduce((a,it)=>a+it.qty*it.base_price,0))}>
+              <div style={{display:"flex",gap:"8px"}}>
+                <button className="btn-ghost" style={{flex:1}} onClick={()=>goToStep(0)}>← Изменить</button>
+                <button className="btn" style={{flex:2}} onClick={()=>setStep(2)}>Выбрать поставщика →</button>
+              </div>
+            </StickyTotal>
           </div>
         )}
 
@@ -633,13 +768,16 @@ function App(){
           <div>
             <div style={{fontWeight:"600",fontSize:"15px",marginBottom:"14px"}}>Сравнение поставщиков</div>
             <SupplierCards offers={calcResult.suppliers} selected={offer} onSelect={setOffer}/>
-            <div style={{display:"flex",gap:"8px",marginTop:"1.25rem"}}>
-              <button className="btn-ghost" style={{flex:1}} onClick={()=>setStep(1)}>← Назад</button>
-              <button className="btn" style={{flex:2,opacity:offer?1:0.35}} disabled={!offer} onClick={toQuote}>
-                Сформировать смету →
-              </button>
-            </div>
-            {!offer && <div style={{fontSize:"12px",color:"var(--text3)",textAlign:"center",marginTop:"8px"}}>Выберите поставщика</div>}
+            <StickyTotal
+              label={offer ? `Итого · ${offer.supplier.name}` : "Выберите поставщика"}
+              amount={offer ? fmt(offer.total) : "—"}>
+              <div style={{display:"flex",gap:"8px"}}>
+                <button className="btn-ghost" style={{flex:1}} onClick={()=>goToStep(1)}>← Назад</button>
+                <button className="btn" style={{flex:2,opacity:offer?1:0.35}} disabled={!offer} onClick={toQuote}>
+                  Сформировать смету →
+                </button>
+              </div>
+            </StickyTotal>
           </div>
         )}
       </div>
