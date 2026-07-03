@@ -5,11 +5,12 @@ from app.services.calculators import CalcItem
 
 
 class SupplierOffer:
-    def __init__(self, supplier: Supplier, items_priced: list, total: float, coverage: float):
+    def __init__(self, supplier: Supplier, items_priced: list, total: float, coverage: float, prices_updated_at=None):
         self.supplier = supplier
         self.items_priced = items_priced   # [{slug, qty, unit, price, subtotal, in_stock}]
         self.total = total
         self.coverage = coverage           # 0..1  — доля позиций в наличии
+        self.prices_updated_at = prices_updated_at   # дата последнего обновления реальных цен (или None, если все по base_price)
 
 
 def match_suppliers(items: List[CalcItem], db: Session) -> List[SupplierOffer]:
@@ -41,11 +42,14 @@ def match_suppliers(items: List[CalcItem], db: Session) -> List[SupplierOffer]:
         sup_prices = price_map.get(sup.id, {})
         items_priced = []
         in_stock_count = 0
+        updated_dates = []
 
         for it in items:
             sp = sup_prices.get(it.product_slug)
             price    = sp.price    if sp else it.base_price
             in_stock = sp.in_stock if sp else False
+            if sp is not None and sp.updated_at is not None:
+                updated_dates.append(sp.updated_at)
             if in_stock:
                 in_stock_count += 1
             items_priced.append({
@@ -60,12 +64,16 @@ def match_suppliers(items: List[CalcItem], db: Session) -> List[SupplierOffer]:
 
         total    = round(sum(x["subtotal"] for x in items_priced), 2)
         coverage = round(in_stock_count / len(items), 2) if items else 0
+        # Если хотя бы часть позиций взята по реальной цене поставщика —
+        # показываем дату самого свежего обновления (консервативно, "не позже чем").
+        prices_updated_at = max(updated_dates) if updated_dates else None
 
         offers.append(SupplierOffer(
             supplier=sup,
             items_priced=items_priced,
             total=total,
             coverage=coverage,
+            prices_updated_at=prices_updated_at,
         ))
 
     # Скоринг: 70% цена, 30% наличие

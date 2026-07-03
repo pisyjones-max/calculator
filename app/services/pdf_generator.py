@@ -27,14 +27,20 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .meta {{ text-align: right; font-size: 11px; color: #888; line-height: 1.8; }}
   .meta b {{ color: #1a1a18; font-size: 14px; }}
   .supplier-block {{ background: #f5f5f2; padding: 10px 14px; border-radius: 6px; margin: 14px 0; font-size: 12px; }}
-  table {{ width: 100%; border-collapse: collapse; margin: 14px 0; }}
+  table {{ width: 100%; border-collapse: collapse; margin: 14px 0; table-layout: fixed; }}
+  colgroup .col-name {{ width: auto; }}
   th {{ text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; padding: 7px 5px; border-bottom: 1.5px solid #1a1a18; color: #888; }}
-  td {{ padding: 7px 5px; border-bottom: 0.5px solid #e8e8e0; font-size: 12px; }}
+  td {{ padding: 7px 5px; border-bottom: 0.5px solid #e8e8e0; font-size: 12px; word-wrap: break-word; }}
   .r {{ text-align: right; }}
   .c {{ text-align: center; }}
-  .total-row td {{ font-weight: 700; font-size: 14px; border-top: 2px solid #1a1a18; border-bottom: none; padding-top: 10px; }}
-  .footer {{ margin-top: 28px; padding-top: 12px; border-top: 0.5px solid #e0e0e0; font-size: 10px; color: #aaa; }}
-  .cat-header {{ font-size: 10px; color: #aaa; text-transform: uppercase; letter-spacing: 0.5px; padding: 10px 5px 4px; font-weight: 600; }}
+  .total-row td {{ font-weight: 700; font-size: 15px; border-top: 2px solid #1a1a18; border-bottom: none; padding-top: 12px; padding-bottom: 2px; }}
+  .footer {{ margin-top: 28px; padding-top: 12px; border-top: 0.5px solid #e0e0e0; font-size: 10.5px; color: #7a7a74; line-height: 1.6; }}
+  .cat-header td {{ font-size: 10px; color: #6b6b65; text-transform: uppercase; letter-spacing: 0.5px; padding: 9px 5px 5px; font-weight: 700;
+    background: #f5f5f2; border-bottom: 0.5px solid #e8e8e0; }}
+  .cat-header {{ page-break-inside: avoid; }}
+  tr {{ page-break-inside: avoid; }}
+  .badge-order {{ display: inline-block; font-size: 9.5px; font-weight: 600; color: #854f0b; background: #faeeda;
+    border-radius: 8px; padding: 1px 7px; margin-left: 6px; vertical-align: middle; }}
 </style>
 </head>
 <body>
@@ -53,11 +59,17 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
 <div class="supplier-block">
   <b>Поставщик:</b> {supplier_name} &nbsp;·&nbsp;
-  Доставка: {delivery} &nbsp;·&nbsp;
-  {phone}
+  Доставка: {delivery}{phone_block}
 </div>
 
 <table>
+  <colgroup>
+    <col class="col-name"/>
+    <col style="width:14%"/>
+    <col style="width:12%"/>
+    <col style="width:17%"/>
+    <col style="width:17%"/>
+  </colgroup>
   <thead>
     <tr>
       <th>Наименование</th>
@@ -106,16 +118,17 @@ def _fmt(n: float) -> str:
 
 def build_rows(items: List[Dict], categories: List[str]) -> str:
     rows = ""
-    shown_cats = []
     for cat in categories:
         group = [it for it in items if it.get("category") == cat]
         if not group:
             continue
         cat_label = CAT_NAMES.get(cat, cat)
-        rows += f'<tr><td class="cat-header" colspan="5">{cat_label}</td></tr>'
+        rows += f'<tr class="cat-header"><td colspan="5">{cat_label}</td></tr>'
         for it in group:
             subtotal = it["qty"] * it["price"]
-            stock_badge = "" if it.get("in_stock", True) else " ⚠️"
+            # Текстовый бейдж вместо эмодзи ⚠️ — в PDF-шрифтах (Liberation/Arial)
+            # у эмодзи нет глифа, вместо значка печатается пустой квадрат.
+            stock_badge = "" if it.get("in_stock", True) else '<span class="badge-order">под заказ</span>'
             rows += (
                 f"<tr>"
                 f"<td>{it['name']}{stock_badge}</td>"
@@ -147,6 +160,7 @@ def generate_pdf(
     categories = ["main", "elem", "wood", "fastener", "seal", "insulation_elem"]
     rows = build_rows(items, categories)
     delivery_str = "Самовывоз" if delivery_days == 0 else f"{delivery_days} дн."
+    phone_block = f" &nbsp;·&nbsp; {phone}" if phone else ""
 
     html = HTML_TEMPLATE.format(
         number=quote_number,
@@ -154,7 +168,7 @@ def generate_pdf(
         calc_type=CALC_TYPE_NAMES.get(calc_type, calc_type),
         supplier_name=supplier_name,
         delivery=delivery_str,
-        phone=phone or "",
+        phone_block=phone_block,
         rows=rows,
         total=_fmt(total),
     )

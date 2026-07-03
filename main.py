@@ -118,9 +118,10 @@ def format_offers(offers):
                 "phone":         o.supplier.phone,
                 "website":       o.supplier.website,
             },
-            "total":        o.total,
-            "coverage":     o.coverage,
-            "items_priced": o.items_priced,
+            "total":              o.total,
+            "coverage":           o.coverage,
+            "items_priced":       o.items_priced,
+            "prices_updated_at":  o.prices_updated_at.isoformat() if o.prices_updated_at else None,
         })
     return result
 
