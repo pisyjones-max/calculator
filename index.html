@@ -55,7 +55,10 @@ const {useState, useMemo} = React;
 
 /* ── API ──────────────────────────────────────── */
 // Если фронт и бэкенд на разных доменах — задайте window.PLATFORMA_API_BASE
-// ДО этого скрипта, например: <script>window.PLATFORMA_API_BASE="https://api.platforma-msk.ru"</script>
+// ДО этого скрипта через отдельный тег script в head, например:
+// window.PLATFORMA_API_BASE = "https://api.platforma-msk.ru"
+// (не пишите здесь буквальный тег "script" с закрывающей частью —
+// браузер разберёт его как конец этого блока, даже внутри комментария)
 const API_BASE = window.PLATFORMA_API_BASE || "";
 
 async function apiCalculate(calcType, payload){
