@@ -1,5 +1,31 @@
 # Деплой backend калькулятора (Render / Railway)
 
+## Самый быстрый способ — Render Blueprint (render.yaml уже в репозитории)
+
+1. Зайти на https://dashboard.render.com/blueprints
+2. **New Blueprint Instance** → выбрать репозиторий `pisyjones-max/calculator`.
+   Render сам найдёт `render.yaml` и `Dockerfile` и предложит создать сервис
+   `platforma-calculator` со всеми настройками (Docker runtime, health-check
+   на `/health`, список нужных переменных окружения).
+3. Render попросит заполнить переменные, помеченные `sync: false`
+   (секреты — они не хранятся в git):
+   - `TELEGRAM_BOT_TOKEN` — токен бота от @BotFather
+   - `TELEGRAM_CHAT_ID` — chat_id менеджера/группы
+   - `PUBLIC_BASE_URL` — на первый раз можно оставить пустым, после деплоя
+     Render покажет ваш домен (`https://platforma-calculator-XXXX.onrender.com`)
+     — впишите его сюда и передеплойте (Manual Deploy → Deploy latest commit)
+   - `DATABASE_URL` — можно оставить пустым (тогда используется SQLite),
+     заполнить понадобится только при подключении Postgres, см. ниже
+4. Нажать **Apply** — Render соберёт Docker-образ и запустит сервис.
+5. Проверить: открыть `https://<ваш-домен>.onrender.com/health` →
+   должно быть `{"status":"ok"}`, и `/widget` — там должен отрисоваться калькулятор.
+
+Дальше — ровно то же самое, что описано ниже (CORS, Postgres, embed-сниппет).
+Разделы ниже пригодятся, если Blueprint недоступен (например, аккаунт без
+доступа к Blueprints) — тогда сервис создаётся вручную через "New Web Service".
+
+---
+
 Backend — FastAPI-приложение с зависимостью на WeasyPrint (генерация PDF-смет),
 которому нужны системные библиотеки (Pango/Cairo). Обычный "голый" Python
 buildpack их не ставит, поэтому деплоим через Docker (`Dockerfile` уже в репозитории).

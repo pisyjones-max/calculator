@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: platforma-calculator
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false          # вписать вручную в Render Dashboard — секрет, в git не хранится
+      - key: TELEGRAM_CHAT_ID
+        sync: false          # chat_id менеджера/группы для уведомлений
+      - key: PUBLIC_BASE_URL
+        sync: false          # заполнить после первого деплоя: https://<ваш-сервис>.onrender.com
+      - key: ALLOWED_ORIGINS
+        value: ""            # пусто = "*" (см. main.py). Сузить после того, как определится домен platforma-msk.ru
+      - key: DATABASE_URL
+        sync: false          # пусто = локальный SQLite. Задать при подключении Postgres (см. DEPLOY.md)
