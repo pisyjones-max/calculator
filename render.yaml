@@ -2,7 +2,7 @@ services:
   - type: web
     name: platforma-calculator
     runtime: docker
-    plan: starter
+    plan: free
     dockerfilePath: ./Dockerfile
     healthCheckPath: /health
     envVars:
