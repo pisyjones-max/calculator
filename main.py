@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -18,16 +19,35 @@ from app.database import get_db, create_tables, Calculation, CalculationItem, Qu
 from app.services.calculators import calc_roofing, calc_facade, calc_insulation, CalcItem
 from app.services.supplier_matcher import match_suppliers
 from app.services.pdf_generator import generate_pdf
-from app.services.telegram_notifier import notify_new_lead
+from app.services.telegram_notifier import notify_new_lead, notify_supplier_new_lead
 
 app = FastAPI(title="PLATFORMA API", version="1.0.0")
 
+# ── CORS ──────────────────────────────────────────────────────────────────
+# ALLOWED_ORIGINS — через запятую, например:
+#   ALLOWED_ORIGINS=https://platforma-msk.ru,https://www.platforma-msk.ru
+# Если переменная не задана — открываем на "*" (удобно для разработки и
+# первого деплоя, когда домен ещё не подключен). После того как калькулятор
+# и виджет заработают на своих доменах — обязательно задайте ALLOWED_ORIGINS
+# на проде и уберите "*": иначе с фронтенда любого сайта можно дергать
+# API (создавать заявки, читать цены и т.д.) от имени вашего бэкенда.
+_allowed_origins_env = os.environ.get("ALLOWED_ORIGINS", "").strip()
+ALLOWED_ORIGINS = [o.strip() for o in _allowed_origins_env.split(",") if o.strip()] or ["*"]
+if ALLOWED_ORIGINS == ["*"]:
+    print("[main] ALLOWED_ORIGINS не задан — CORS открыт на '*'. "
+          "После деплоя на постоянный домен задайте ALLOWED_ORIGINS в переменных окружения.")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# /static — сюда вынесен общий JS-код фронтенда (app.js), который
+# переиспользуют и index.html (полноценный сайт), и widget.html
+# (встраиваемая версия для iframe на platforma-msk.ru).
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.on_event("startup")
 def startup():
@@ -44,6 +64,16 @@ def read_root():
         "message": "Бэкенд работает, но файл index.html не найден в корне проекта. "
                    "Убедитесь, что он лежит в той же папке, что и main.py!"
     }
+
+
+@app.get("/widget")
+def read_widget():
+    # Минимальная версия калькулятора без шапки сайта — для встраивания
+    # через <iframe> на platforma-msk.ru и куда угодно ещё. Тот же backend,
+    # тот же app.js, просто другой HTML-обвес (см. static/widget.html).
+    if os.path.exists("static/widget.html"):
+        return FileResponse("static/widget.html")
+    raise HTTPException(404, "widget.html не найден")
 
 
 @app.get("/platforma-calc.html")
@@ -80,6 +110,8 @@ class SendRequestBody(BaseModel):
     name: str
     phone: str
     email: Optional[str] = None
+    source: Optional[str] = None      # "standalone" | "widget" — откуда пришла заявка
+    page_url: Optional[str] = None    # адрес страницы, на которой стоял виджет (или сам сайт)
 
 
 # ── 2. HELPERS ──────────────────────────────────────────────────────────────
@@ -238,7 +270,10 @@ def send_request(body: SendRequestBody, db: Session = Depends(get_db)):
     req = QuoteRequest(
         quote_id=body.quote_id,
         supplier_id=body.supplier_id,
-        contact={"name": body.name, "phone": body.phone, "email": body.email},
+        contact={
+            "name": body.name, "phone": body.phone, "email": body.email,
+            "source": body.source, "page_url": body.page_url,
+        },
         status="sent",
         sent_at=datetime.utcnow(),
     )
@@ -255,9 +290,29 @@ def send_request(body: SendRequestBody, db: Session = Depends(get_db)):
         client_name=body.name,
         client_phone=body.phone,
         client_email=body.email,
+        source=body.source,
+        page_url=body.page_url,
     )
 
-    return {"status": "ok", "message": "Заявка принята.", "manager_notified": notified}
+    # Рассылка поставщику напрямую в его Telegram (если для него настроен
+    # telegram_chat_id — см. app/database.py Supplier.telegram_chat_id).
+    # Так поставщик узнаёт о заявке сразу, а не только после того, как
+    # менеджер PLATFORMA её перешлёт вручную.
+    supplier_notified = notify_supplier_new_lead(
+        supplier_chat_id=supplier.telegram_chat_id,
+        quote_number=quote.number,
+        calc_type=calc.calc_type if calc else "",
+        total=quote.total_price,
+        client_name=body.name,
+        client_phone=body.phone,
+    )
+
+    return {
+        "status": "ok",
+        "message": "Заявка принята.",
+        "manager_notified": notified,
+        "supplier_notified": supplier_notified,
+    }
 
 @app.get("/api/suppliers")
 def list_suppliers(db: Session = Depends(get_db)):

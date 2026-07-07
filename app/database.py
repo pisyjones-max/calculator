@@ -1,11 +1,17 @@
+import os
 from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, DateTime, JSON, ForeignKey, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime
 
-DATABASE_URL = "sqlite:///./platforma.db"
+# По умолчанию — локальный SQLite-файл. На проде можно задать DATABASE_URL
+# (например Postgres от Render/Railway: postgresql://user:pass@host/db) —
+# тогда данные не теряются при пересоздании контейнера/диска. Для Postgres
+# дополнительно потребуется psycopg2-binary в requirements.txt.
+DATABASE_URL = os.environ.get("DATABASE_URL") or "sqlite:///./platforma.db"
+_connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+engine = create_engine(DATABASE_URL, connect_args=_connect_args)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
@@ -41,6 +47,7 @@ class Supplier(Base):
     phone         = Column(String)
     website       = Column(String)
     is_active     = Column(Boolean, default=True)
+    telegram_chat_id = Column(String)  # chat_id поставщика в Telegram — для рассылки лидов напрямую (см. telegram_notifier.notify_supplier_new_lead). Пусто = поставщику не шлём, только менеджеру.
     prices        = relationship("SupplierPrice", back_populates="supplier")
 
 
