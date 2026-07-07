@@ -21,9 +21,13 @@
      сразу при первом рендере (иначе будет вспышка "полной" версии). -->
 <script>window.PLATFORMA_EMBED = true;</script>
 
-<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<!-- Локальные копии вместо unpkg.com — см. комментарий в index.html. Для
+     виджета это особенно важно: он встраивается на чужой сайт, и если
+     unpkg подвиснет, "не работает" будет выглядеть весь platforma-msk.ru,
+     а не только сам калькулятор. -->
+<script src="/static/vendor/react.production.min.js"></script>
+<script src="/static/vendor/react-dom.production.min.js"></script>
+<script src="/static/vendor/babel.min.js"></script>
 <style>
 :root{
   --bg:transparent;--surface:#fff;--surface2:#f0efe9;--border:rgba(0,0,0,0.12);--border2:rgba(0,0,0,0.25);
